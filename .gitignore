@@ -1,0 +1,13 @@
+.venv
+*.pyc
+*.egg-info
+/build
+/dist
+
+config.yaml
+registration.yaml
+
+*.log
+*.log.*
+
+*.db
