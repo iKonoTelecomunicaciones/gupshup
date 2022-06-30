@@ -31,10 +31,10 @@ class GupshupMessageData(SerializableAttrs["GupshupMessageData"]):
     caption: str = attr.ib(default=None, metadata={"json": "caption"})
     latitude: str = attr.ib(default=None, metadata={"json": "latitude"})
     longitude: str = attr.ib(default=None, metadata={"json": "longitude"})
-    # Parámetros para menús con botones
+    # Parameters for menus with buttons
     title: str = attr.ib(default=None, metadata={"json": "title"})
     reply_message: str = attr.ib(default=None, metadata={"json": "reply"})
-    # Parámetro para menú con listas
+    # Parameter for menu with lists
     postback_text: str = attr.ib(default=None, metadata={"json": "postbackText"})
     # Error response
     code: str = attr.ib(default=None, metadata={"json": "code"})

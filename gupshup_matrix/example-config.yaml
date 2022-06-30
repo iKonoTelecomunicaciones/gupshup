@@ -104,7 +104,7 @@ gupshup:
     # Gupsghup app name
     app_name: DemoApp
     # Gupsghup sender
-    sender: "573183560116"
+    sender: "5730123456789"
     # Path prefix for webhook endpoints. Subpaths are /status and /receive.
     # Note that the webhook must be put behind a reverse proxy with https.
     webhook_path: /gupshup
