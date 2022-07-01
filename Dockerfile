@@ -25,8 +25,6 @@ RUN apk add --no-cache  \
 
 COPY . /opt/gupshup-matrix
 WORKDIR /opt/gupshup-matrix
-RUN pip3 install .[phonenumbers]
-RUN pip3 install markdown==3.3.6
 
 VOLUME /data
 

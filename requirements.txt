@@ -5,3 +5,5 @@ ruamel.yaml==0.16.10
 commonmark==0.9.1
 python-magic==0.4.18
 mautrix==0.5.7
+phonenumbers==8.12.6
+Markdown==3.3.6
