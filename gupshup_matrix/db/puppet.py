@@ -48,6 +48,7 @@ class Puppet:
             self.next_batch,
             str(self.base_url) if self.base_url else None,
         )
+
     @classmethod
     def _from_row(cls, row: asyncpg.Record) -> Puppet:
         return cls(**row)
@@ -105,9 +106,11 @@ class Puppet:
             return None
         return cls._from_row(row)
 
-
     @classmethod
     async def all_with_custom_mxid(cls) -> list[Puppet]:
-        q = "SELECT gsid, matrix_registered FROM puppet WHERE gsid IS NOT NULL"
+        q = (
+            "SELECT pk, gsid, name, username, photo_id, photo_mxc, name_set, avatar_set, is_registered,"
+            "       custom_mxid, access_token, next_batch, base_url "
+        )
         rows = await cls.db.fetch(q)
         return [cls._from_row(row) for row in rows]

@@ -7,15 +7,15 @@ upgrade_table = UpgradeTable()
 @upgrade_table.register(description="Initial revision")
 async def upgrade_v1(conn: Connection) -> None:
     await conn.execute(
-        """CREATE TABLE portal (
+    """CREATE TABLE portal (
         gsid     TEXT,
-        mxid     TEXT,
+        mxid     TEXT
     )"""
     )
     await conn.execute(
         """CREATE TABLE puppet (
         pk            BIGINT PRIMARY KEY,
-        gsid                   TEXT NOT NULL,
+        gsid          TEXT NOT NULL,
         name          TEXT,
         username      TEXT,
         photo_id      TEXT,

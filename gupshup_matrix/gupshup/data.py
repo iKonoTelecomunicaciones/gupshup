@@ -25,7 +25,7 @@ class GupshupMessageStatus(str):
 
 
 @dataclass
-class GupshupMessageData(SerializableAttrs["GupshupMessageData"]):
+class GupshupMessageData(SerializableAttrs):
     text: str = attr.ib(default=None, metadata={"json": "text"})
     url: str = attr.ib(default=None, metadata={"json": "url"})
     caption: str = attr.ib(default=None, metadata={"json": "caption"})
@@ -46,7 +46,7 @@ class GupshupMessageData(SerializableAttrs["GupshupMessageData"]):
 
 
 @dataclass
-class GupshupMessageSender(SerializableAttrs["GupshupMessageSender"]):
+class GupshupMessageSender(SerializableAttrs):
     phone: GupshupUserID = attr.ib(default=None, metadata={"json": "phone"})
     name: str = attr.ib(default=None, metadata={"json": "name"})
     country_code: str = attr.ib(default=None, metadata={"json": "country_code"})
@@ -54,7 +54,7 @@ class GupshupMessageSender(SerializableAttrs["GupshupMessageSender"]):
 
 
 @dataclass
-class GupshupPayload(SerializableAttrs["GupshupPayload"]):
+class GupshupPayload(SerializableAttrs):
     id: GupshupMessageID = attr.ib(default=None, metadata={"json": "id"})
     # gsid come only on GupshupStatusEvent - delivered and read events
     gsid: GupshupMessageID = attr.ib(default=None, metadata={"json": "gsId"})
@@ -67,7 +67,7 @@ class GupshupPayload(SerializableAttrs["GupshupPayload"]):
 
 
 @dataclass
-class GupshupMessageEvent(SerializableAttrs["GupshupEvent"]):
+class GupshupMessageEvent(SerializableAttrs):
     app: str = attr.ib(metadata={"json": "app"})
     timestamp: str = attr.ib(metadata={"json": "timestamp"})
     event_type: str = attr.ib(metadata={"json": "type"})
@@ -75,7 +75,7 @@ class GupshupMessageEvent(SerializableAttrs["GupshupEvent"]):
 
 
 @dataclass
-class GupshupStatusEvent(SerializableAttrs["GupshupEvent"]):
+class GupshupStatusEvent(SerializableAttrs):
     app: str = attr.ib(metadata={"json": "app"})
     timestamp: str = attr.ib(metadata={"json": "timestamp"})
     event_type: str = attr.ib(metadata={"json": "type"})

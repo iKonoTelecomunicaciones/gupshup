@@ -1,25 +1,23 @@
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from aiohttp import web
 
 from .. import portal as po
+from ..config import Config
 from .data import GupshupEventType, GupshupMessageEvent, GupshupStatusEvent
-
-if TYPE_CHECKING:
-    from ..context import Context
 
 
 class GupshupHandler:
     log: logging.Logger = logging.getLogger("gupshup.in")
     app: web.Application
 
-    def __init__(self, context: "Context") -> None:
-        self.loop = context.loop or asyncio.get_event_loop()
+    def __init__(self, config: Config, loop: asyncio.AbstractEventLoop = None) -> None:
+        self.loop = loop or asyncio.get_event_loop()
         self.app = web.Application(loop=self.loop)
         self.app.router.add_route("POST", "/receive", self.receive)
-        self.app_name = context.config["gupshup.app_name"]
+        self.app_name = config["gupshup.app_name"]
 
     async def _validate_request(
         self, data: Dict, type_class: Any
