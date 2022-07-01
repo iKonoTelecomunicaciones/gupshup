@@ -35,12 +35,13 @@ from .gupshup import (
 )
 
 if TYPE_CHECKING:
-    from .context import Context
+    from .__main__ import GupshupBridge
+
 
 InviteList = Union[UserID, List[UserID]]
 
 
-class Portal(BasePortal):
+class Portal(DBPortal, BasePortal):
     homeserver_address: str
     google_maps_url: str
     message_template: Template
@@ -69,13 +70,11 @@ class Portal(BasePortal):
         self,
         gsid: GupshupUserID,
         mxid: Optional[RoomID] = None,
-        db_instance: Optional[DBPortal] = None,
     ) -> None:
         super().__init__()
         self.gsid = gsid
         self.mxid = mxid
 
-        self._db_instance = db_instance
         self._main_intent = None
         self._create_room_lock = asyncio.Lock()
         self._send_lock = asyncio.Lock()
@@ -86,29 +85,19 @@ class Portal(BasePortal):
             self.by_mxid[self.mxid] = self
 
     @property
-    def db_instance(self) -> DBPortal:
-        if not self._db_instance:
-            self._db_instance = DBPortal(gsid=self.gsid, mxid=self.mxid)
-        return self._db_instance
-
-    @classmethod
-    def from_db(cls, db_portal: DBPortal) -> "Portal":
-        return Portal(gsid=db_portal.gsid, mxid=db_portal.mxid, db_instance=db_portal)
-
-    def save(self) -> None:
-        self.db_instance.edit(mxid=self.mxid)
-
-    def delete(self) -> None:
-        self.by_gsid.pop(self.gsid, None)
-        self.by_mxid.pop(self.mxid, None)
-        if self._db_instance:
-            self._db_instance.delete()
-
-    @property
     def main_intent(self) -> IntentAPI:
         if not self._main_intent:
-            self._main_intent = p.Puppet.get_by_gsid(self.gsid).intent
+            raise ValueError("Portal must be postinit()ed before main_intent can be used")
         return self._main_intent
+
+    @classmethod
+    def init_cls(cls, bridge: "GupshupBridge") -> None:
+        cls.config = bridge.config
+        cls.matrix = bridge.matrix
+        cls.az = bridge.az
+        cls.loop = bridge.loop
+        cls.bridge = bridge
+        cls.private_chat_portal_meta = cls.config["bridge.private_chat_portal_meta"]
 
     def send_text_message(self, message: GupshupMessageEvent) -> Optional["Portal"]:
         html, text = whatsapp_to_matrix(message)
@@ -412,15 +401,15 @@ class Portal(BasePortal):
         return None
 
 
-def init(context: "Context") -> None:
-    Portal.az, config, Portal.loop = context.core
-    Portal.gsc = context.gsc
-    Portal.homeserver_address = config["homeserver.public_address"]
-    Portal.google_maps_url = config["bridge.google_maps_url"]
-    Portal.message_template = Template(config["bridge.message_template"])
-    Portal.bridge_notices = config["bridge.bridge_notices"]
-    Portal.federate_rooms = config["bridge.federate_rooms"]
-    Portal.invite_users = config["bridge.invite_users"]
-    Portal.initial_state = config["bridge.initial_state"]
-    Portal.auto_change_room_name = config["bridge.auto_change_room_name"]
-    Portal.error_codes = config["gupshup.error_codes"]
+# def init(context: "Context") -> None:
+#     Portal.az, config, Portal.loop = context.core
+#     Portal.gsc = context.gsc
+#     Portal.homeserver_address = config["homeserver.public_address"]
+#     Portal.google_maps_url = config["bridge.google_maps_url"]
+#     Portal.message_template = Template(config["bridge.message_template"])
+#     Portal.bridge_notices = config["bridge.bridge_notices"]
+#     Portal.federate_rooms = config["bridge.federate_rooms"]
+#     Portal.invite_users = config["bridge.invite_users"]
+#     Portal.initial_state = config["bridge.initial_state"]
+#     Portal.auto_change_room_name = config["bridge.auto_change_room_name"]
+#     Portal.error_codes = config["gupshup.error_codes"]

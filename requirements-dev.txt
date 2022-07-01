@@ -1,10 +1,10 @@
 aiohttp==3.6.2
-SQLAlchemy==1.3.18
 alembic==1.4.2
 ruamel.yaml==0.16.10
 commonmark==0.9.1
 python-magic==0.4.18
-mautrix==0.5.7
+mautrix>=0.15.7,<0.17
+asyncpg>=0.20,<0.26
 phonenumbers==8.12.6
 Markdown==3.3.6
 isort==5.10.1

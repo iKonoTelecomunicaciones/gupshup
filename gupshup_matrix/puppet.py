@@ -1,28 +1,24 @@
-from typing import TYPE_CHECKING, Dict, Optional
+from __future__ import annotations
 
-from mautrix.bridge import CustomPuppetMixin
+from typing import TYPE_CHECKING, AsyncGenerator, AsyncIterable, Awaitable, Dict, Optional, cast
+
+from mautrix.bridge import BasePuppet, async_getter_lock
 from mautrix.types import UserID
 from mautrix.util.simple_template import SimpleTemplate
 
-from .config import Config
 from .db import Puppet as DBPuppet
 from .gupshup import GupshupUserID
-
-if TYPE_CHECKING:
-    from .context import Context
 
 try:
     import phonenumbers
 except ImportError:
     phonenumbers = None
 
-import logging
+if TYPE_CHECKING:
+    from .__main__ import GupshupBridge
 
-config: Config
 
-
-class Puppet(CustomPuppetMixin):
-    log: logging.Logger = logging.getLogger("mau.puppet")
+class Puppet(DBPuppet, BasePuppet):
     hs_domain: str
     gsid_template: SimpleTemplate[int] = SimpleTemplate("{number}", "number", type=int)
     mxid_template: SimpleTemplate[str]
@@ -33,21 +29,39 @@ class Puppet(CustomPuppetMixin):
     gsid: GupshupUserID
     _formatted_number: Optional[str]
 
-    _db_instance: Optional[DBPuppet]
-
     def __init__(
         self,
         gsid: GupshupUserID,
         is_registered: bool = False,
-        db_instance: Optional[DBPuppet] = None,
     ) -> None:
         super().__init__()
         self.gsid = gsid
         self.is_registered = is_registered
         self._formatted_number = None
-        self._db_instance = db_instance
-        self.intent = self.az.intent.user(self.mxid)
         self.log = self.log.getChild(self.gsid)
+        self.by_gsid[self.gsid] = self
+        self.intent = self._fresh_intent()
+
+    @classmethod
+    def init_cls(cls, bridge: "GupshupBridge") -> AsyncIterable[Awaitable[None]]:
+        cls.config = bridge.config
+        cls.loop = bridge.loop
+        cls.mx = bridge.matrix
+        cls.az = bridge.az
+        cls.hs_domain = cls.config["homeserver.domain"]
+        cls.mxid_template = SimpleTemplate(
+            cls.config["bridge.username_template"],
+            "userid",
+            prefix="@",
+            suffix=f":{cls.hs_domain}",
+            type=int,
+        )
+        cls.sync_with_custom_puppets = cls.config["bridge.sync_with_custom_puppets"]
+
+        cls.login_device_name = "Gupshup Bridge"
+        return (puppet.try_start() async for puppet in cls.all_with_custom_mxid())
+
+    def _add_to_cache(self) -> None:
         self.by_gsid[self.gsid] = self
 
     @property
@@ -130,22 +144,35 @@ class Puppet(CustomPuppetMixin):
         return None
 
     @classmethod
+    @async_getter_lock
+    async def get_by_custom_mxid(cls, mxid: UserID) -> "Puppet" | None:
+        try:
+            return cls.by_custom_mxid[mxid]
+        except KeyError:
+            pass
+
+        puppet = cast(cls, await super().get_by_custom_mxid(mxid))
+        if puppet:
+            puppet._add_to_cache()
+            return puppet
+
+        return None
+
+    @classmethod
+    def get_id_from_mxid(cls, mxid: UserID) -> int | None:
+        return cls.mxid_template.parse(mxid)
+
+    @classmethod
     def get_mxid_from_gsid(cls, gsid: GupshupUserID) -> UserID:
         return UserID(cls.mxid_template.format_full(str(cls.gsid_template.parse(gsid))))
 
-
-def init(context: "Context") -> None:
-    global config
-    Puppet.az, config, Puppet.loop = context.core
-    Puppet.mx = context.mx
-    Puppet.hs_domain = config["homeserver"]["domain"]
-    Puppet.mxid_template = SimpleTemplate(
-        config["bridge.username_template"],
-        "userid",
-        prefix="@",
-        suffix=f":{Puppet.hs_domain}",
-        type=str,
-    )
-    Puppet.displayname_template = SimpleTemplate(
-        config["bridge.displayname_template"], "displayname", type=str
-    )
+    @classmethod
+    async def all_with_custom_mxid(cls) -> AsyncGenerator["Puppet", None]:
+        puppets = await super().all_with_custom_mxid()
+        puppet: cls
+        for index, puppet in enumerate(puppets):
+            try:
+                yield cls.by_gsid[puppet.gsid]
+            except KeyError:
+                puppet._add_to_cache()
+                yield puppet
