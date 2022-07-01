@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Dict, Optional
 
 from mautrix.bridge import BaseUser
@@ -7,14 +9,11 @@ from . import puppet as pu
 from .config import Config
 
 if TYPE_CHECKING:
-    from .context import Context
-
-config: Config
-
+    from .__main__ import GupshupBridge
 
 class User(BaseUser):
     by_mxid: Dict[UserID, "User"] = {}
-
+    config: Config
     is_whitelisted: bool
     is_admin: bool
 
@@ -23,19 +22,31 @@ class User(BaseUser):
         self.mxid = mxid
         self.by_mxid[self.mxid] = self
         self.command_status = None
-        self.is_whitelisted, self.is_admin = config.get_permissions(self.mxid)
+        (
+            self.relay_whitelisted,
+            self.is_whitelisted,
+            self.is_admin,
+            self.permission_level,
+        ) = self.config.get_permissions(mxid)
         self.log = self.log.getChild(self.mxid)
 
     @classmethod
-    def get(cls, mxid: UserID) -> Optional["User"]:
+    def init_cls(cls, bridge: "GupshupBridge") -> None:
+        cls.bridge = bridge
+        cls.config = bridge.config
+        cls.az = bridge.az
+        cls.loop = bridge.loop
+
+    async def get_puppet(self) -> pu.Puppet | None:
+        if not self.mxid:
+            return None
+        return await pu.Puppet.get_by_mxid(self.mxid)
+
+    @classmethod
+    def get_by_mxid(cls, mxid: UserID) -> Optional["User"]:
         if pu.Puppet.get_gsid_from_mxid(mxid) is not None or mxid == cls.az.bot_mxid:
             return None
         try:
             return cls.by_mxid[mxid]
         except KeyError:
             return cls(mxid)
-
-
-def init(context: "Context") -> None:
-    global config
-    User.az, config, User.loop = context.core

@@ -2,10 +2,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, AsyncGenerator, AsyncIterable, Awaitable, Dict, Optional, cast
 
+from mautrix.appservice import IntentAPI
 from mautrix.bridge import BasePuppet, async_getter_lock
-from mautrix.types import UserID
+from mautrix.types import ContentURI, SyncToken, UserID
 from mautrix.util.simple_template import SimpleTemplate
+from yarl import URL
 
+from . import portal as p
+from . import user as u
+from .config import Config
 from .db import Puppet as DBPuppet
 from .gupshup import GupshupUserID
 
@@ -19,27 +24,54 @@ if TYPE_CHECKING:
 
 
 class Puppet(DBPuppet, BasePuppet):
-    hs_domain: str
-    gsid_template: SimpleTemplate[int] = SimpleTemplate("{number}", "number", type=int)
-    mxid_template: SimpleTemplate[str]
-    displayname_template: SimpleTemplate[str]
-
+    by_pk: dict[int, Puppet] = {}
     by_gsid: Dict[GupshupUserID, "Puppet"] = {}
+    by_custom_mxid: dict[UserID, Puppet] = {}
+    hs_domain: str
+    mxid_template: SimpleTemplate[str]
+    gsid_template: SimpleTemplate[int] = SimpleTemplate("{number}", "number", type=int)
 
-    gsid: GupshupUserID
-    _formatted_number: Optional[str]
+    config: Config
+
+    default_mxid_intent: IntentAPI
+    default_mxid: UserID
 
     def __init__(
         self,
-        gsid: GupshupUserID,
+        pk: int,
+        gsid: str,
+        name: str | None = None,
+        username: str | None = None,
+        photo_id: str | None = None,
+        photo_mxc: ContentURI | None = None,
+        name_set: bool = False,
+        avatar_set: bool = False,
         is_registered: bool = False,
+        custom_mxid: UserID | None = None,
+        access_token: str | None = None,
+        next_batch: SyncToken | None = None,
+        base_url: URL | None = None,
     ) -> None:
-        super().__init__()
-        self.gsid = gsid
-        self.is_registered = is_registered
-        self._formatted_number = None
+        super().__init__(
+            pk=pk,
+            gsid=gsid,
+            name=name,
+            username=username,
+            photo_id=photo_id,
+            name_set=name_set,
+            photo_mxc=photo_mxc,
+            avatar_set=avatar_set,
+            is_registered=is_registered,
+            custom_mxid=custom_mxid,
+            access_token=access_token,
+            next_batch=next_batch,
+            base_url=base_url,
+        )
+
         self.log = self.log.getChild(self.gsid)
-        self.by_gsid[self.gsid] = self
+
+        self.default_mxid = self.get_mxid_from_id(pk)
+        self.default_mxid_intent = self.az.intent.user(self.default_mxid)
         self.intent = self._fresh_intent()
 
     @classmethod
@@ -65,53 +97,30 @@ class Puppet(DBPuppet, BasePuppet):
         self.by_gsid[self.gsid] = self
 
     @property
-    def phone_number(self) -> int:
-        return self.gsid_template.parse(self.gsid)
-
-    @property
-    def formatted_phone_number(self) -> str:
-        if not self._formatted_number and self.phone_number:
-            parsed = phonenumbers.parse(f"+{self.phone_number}")
-            fmt = phonenumbers.PhoneNumberFormat.INTERNATIONAL
-            self._formatted_number = phonenumbers.format_number(parsed, fmt)
-        return self._formatted_number
-
-    @property
     def mxid(self) -> UserID:
         return UserID(self.mxid_template.format_full(str(self.phone_number)))
 
-    @property
-    def displayname(self) -> str:
-        return self.displayname_template.format_full(str(self.formatted_phone_number))
+    def intent_for(self, portal: p.Portal) -> IntentAPI:
+        if portal.gsid == self.gsid:
+            return self.default_mxid_intent
+        return self.intent
+
+    async def save(self) -> None:
+        await self.update()
 
     @property
-    def db_instance(self) -> DBPuppet:
-        if not self._db_instance:
-            self._db_instance = DBPuppet(gsid=self.gsid, matrix_registered=self.is_registered)
-        return self._db_instance
+    def phone_number(self) -> int:
+        return self.gsid_template.parse(self.gsid)
 
     @classmethod
-    def from_db(cls, db_puppet: DBPuppet) -> "Puppet":
-        return cls(
-            gsid=db_puppet.gsid, is_registered=db_puppet.matrix_registered, db_instance=db_puppet
-        )
-
-    def save(self) -> None:
-        self.db_instance.edit(matrix_registered=self.is_registered)
+    def get_mxid_from_id(cls, pk: int) -> UserID:
+        return UserID(cls.mxid_template.format_full(pk))
 
     async def get_displayname(self) -> str:
         return await self.intent.get_displayname(str(self.mxid))
 
-    async def update_displayname(self, displayname: Optional[str] = None) -> None:
-        displayname = (
-            self.displayname_template.format_full(str(displayname))
-            if displayname
-            else str(self.gsid)
-        )
-        await self.intent.set_displayname(displayname)
-
     @classmethod
-    def get_by_gsid(cls, gsid: GupshupUserID, create: bool = True) -> Optional["Puppet"]:
+    async def get_by_gsid(cls, gsid: GupshupUserID, create: bool = True) -> Optional["Puppet"]:
         try:
             return cls.by_gsid[gsid]
         except KeyError:
@@ -119,11 +128,11 @@ class Puppet(DBPuppet, BasePuppet):
 
         db_puppet = DBPuppet.get_by_gsid(gsid)
         if db_puppet:
-            return cls.from_db(db_puppet)
+            return db_puppet
 
         if create:
             puppet = cls(gsid)
-            puppet.db_instance.insert()
+            await puppet.insert()
             return puppet
 
         return None
@@ -142,6 +151,7 @@ class Puppet(DBPuppet, BasePuppet):
         if parsed:
             return GupshupUserID(cls.gsid_template.format_full(parsed))
         return None
+
 
     @classmethod
     @async_getter_lock
@@ -165,6 +175,7 @@ class Puppet(DBPuppet, BasePuppet):
     @classmethod
     def get_mxid_from_gsid(cls, gsid: GupshupUserID) -> UserID:
         return UserID(cls.mxid_template.format_full(str(cls.gsid_template.parse(gsid))))
+
 
     @classmethod
     async def all_with_custom_mxid(cls) -> AsyncGenerator["Puppet", None]:

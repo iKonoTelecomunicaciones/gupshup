@@ -14,8 +14,19 @@ async def upgrade_v1(conn: Connection) -> None:
     )
     await conn.execute(
         """CREATE TABLE puppet (
-        gsid                   TEXT PRIMARY KEY,
-        matrix_registered      BOOLEAN
+        pk            BIGINT PRIMARY KEY,
+        gsid                   TEXT NOT NULL,
+        name          TEXT,
+        username      TEXT,
+        photo_id      TEXT,
+        photo_mxc     TEXT,
+        name_set      BOOLEAN NOT NULL DEFAULT false,
+        avatar_set    BOOLEAN NOT NULL DEFAULT false,
+        is_registered BOOLEAN NOT NULL DEFAULT false,
+        custom_mxid   TEXT,
+        access_token  TEXT,
+        next_batch    TEXT,
+        base_url      TEXT
     )"""
     )
     await conn.execute(

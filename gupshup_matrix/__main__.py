@@ -46,6 +46,7 @@ class GupshupBridge(Bridge):
     async def start(self) -> None:
         self.add_startup_actions(Puppet.init_cls(self))
         Portal.init_cls(self)
+        User.init_cls(self)
         await super().start()
 
     def prepare_stop(self) -> None:
