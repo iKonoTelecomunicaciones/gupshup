@@ -7,6 +7,7 @@ from mautrix.types import SerializableAttrs
 GupshupMessageID = NewType("GupshupMessageID", str)
 GupshupUserID = NewType("GupshupUserID", str)
 GupshupAccountID = NewType("GupshupAccountID", str)
+GupshupApplication = NewType("GupshupApplication", str)
 
 
 class GupshupEventType(str):
@@ -47,7 +48,7 @@ class GupshupMessageData(SerializableAttrs):
 
 @dataclass
 class GupshupMessageSender(SerializableAttrs):
-    phone: GupshupUserID = attr.ib(default=None, metadata={"json": "phone"})
+    phone: str = attr.ib(default=None, metadata={"json": "phone"})
     name: str = attr.ib(default=None, metadata={"json": "name"})
     country_code: str = attr.ib(default=None, metadata={"json": "country_code"})
     dial_code: str = attr.ib(default=None, metadata={"json": "dial_code"})
@@ -68,7 +69,7 @@ class GupshupPayload(SerializableAttrs):
 
 @dataclass
 class GupshupMessageEvent(SerializableAttrs):
-    app: str = attr.ib(metadata={"json": "app"})
+    app: GupshupApplication = attr.ib(metadata={"json": "app"})
     timestamp: str = attr.ib(metadata={"json": "timestamp"})
     event_type: str = attr.ib(metadata={"json": "type"})
     payload: GupshupPayload = attr.ib(metadata={"json": "payload"})

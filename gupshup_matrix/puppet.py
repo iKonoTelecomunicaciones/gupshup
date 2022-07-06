@@ -4,15 +4,13 @@ from typing import TYPE_CHECKING, AsyncGenerator, AsyncIterable, Awaitable, Dict
 
 from mautrix.appservice import IntentAPI
 from mautrix.bridge import BasePuppet, async_getter_lock
-from mautrix.types import ContentURI, SyncToken, UserID
+from mautrix.types import SyncToken, UserID
 from mautrix.util.simple_template import SimpleTemplate
 from yarl import URL
 
 from . import portal as p
-from . import user as u
 from .config import Config
 from .db import Puppet as DBPuppet
-from .gupshup import GupshupUserID
 
 try:
     import phonenumbers
@@ -24,12 +22,10 @@ if TYPE_CHECKING:
 
 
 class Puppet(DBPuppet, BasePuppet):
-    by_pk: dict[int, Puppet] = {}
-    by_gsid: Dict[GupshupUserID, "Puppet"] = {}
+    by_number: Dict[str, "Puppet"] = {}
     by_custom_mxid: dict[UserID, Puppet] = {}
     hs_domain: str
     mxid_template: SimpleTemplate[str]
-    gsid_template: SimpleTemplate[int] = SimpleTemplate("{number}", "number", type=int)
 
     config: Config
 
@@ -38,14 +34,8 @@ class Puppet(DBPuppet, BasePuppet):
 
     def __init__(
         self,
-        pk: int,
-        gsid: str,
+        number: str | None,
         name: str | None = None,
-        username: str | None = None,
-        photo_id: str | None = None,
-        photo_mxc: ContentURI | None = None,
-        name_set: bool = False,
-        avatar_set: bool = False,
         is_registered: bool = False,
         custom_mxid: UserID | None = None,
         access_token: str | None = None,
@@ -53,14 +43,8 @@ class Puppet(DBPuppet, BasePuppet):
         base_url: URL | None = None,
     ) -> None:
         super().__init__(
-            pk=pk,
-            gsid=gsid,
+            number=number,
             name=name,
-            username=username,
-            photo_id=photo_id,
-            name_set=name_set,
-            photo_mxc=photo_mxc,
-            avatar_set=avatar_set,
             is_registered=is_registered,
             custom_mxid=custom_mxid,
             access_token=access_token,
@@ -68,10 +52,11 @@ class Puppet(DBPuppet, BasePuppet):
             base_url=base_url,
         )
 
-        self.log = self.log.getChild(self.gsid)
+        self.log = self.log.getChild(self.number)
 
-        self.default_mxid = self.get_mxid_from_id(pk)
+        self.default_mxid = self.get_mxid_from_number(self.number)
         self.default_mxid_intent = self.az.intent.user(self.default_mxid)
+
         self.intent = self._fresh_intent()
 
     @classmethod
@@ -86,72 +71,72 @@ class Puppet(DBPuppet, BasePuppet):
             "userid",
             prefix="@",
             suffix=f":{cls.hs_domain}",
-            type=int,
         )
         cls.sync_with_custom_puppets = cls.config["bridge.sync_with_custom_puppets"]
 
         cls.login_device_name = "Gupshup Bridge"
         return (puppet.try_start() async for puppet in cls.all_with_custom_mxid())
 
+    def intent_for(self, portal: p.Portal) -> IntentAPI:
+        if portal.number == self.number:
+            return self.default_mxid_intent
+        return self.intent
+
     def _add_to_cache(self) -> None:
-        self.by_gsid[self.gsid] = self
+        if self.number:
+            self.by_number[self.number] = self
+        if self.custom_mxid:
+            self.by_custom_mxid[self.custom_mxid] = self
+
 
     @property
     def mxid(self) -> UserID:
-        return UserID(self.mxid_template.format_full(str(self.phone_number)))
-
-    def intent_for(self, portal: p.Portal) -> IntentAPI:
-        if portal.gsid == self.gsid:
-            return self.default_mxid_intent
-        return self.intent
+        return UserID(self.mxid_template.format_full(self.number))
 
     async def save(self) -> None:
         await self.update()
 
-    @property
-    def phone_number(self) -> int:
-        return self.gsid_template.parse(self.gsid)
-
     @classmethod
-    def get_mxid_from_id(cls, pk: int) -> UserID:
-        return UserID(cls.mxid_template.format_full(pk))
+    def get_mxid_from_number(cls, number: str) -> UserID:
+        return UserID(cls.mxid_template.format_full(number))
 
     async def get_displayname(self) -> str:
-        return await self.intent.get_displayname(str(self.mxid))
+        return await self.intent.get_displayname(self.mxid)
 
     @classmethod
-    async def get_by_gsid(cls, gsid: GupshupUserID, create: bool = True) -> Optional["Puppet"]:
+    @async_getter_lock
+    async def get_by_number(cls, number: str, create: bool = True) -> Optional["Puppet"]:
         try:
-            return cls.by_gsid[gsid]
+            return cls.by_number[number]
         except KeyError:
             pass
 
-        db_puppet = DBPuppet.get_by_gsid(gsid)
-        if db_puppet:
-            return db_puppet
+        puppet = cast(cls, await super().get_by_number(number))
+        if puppet is not None:
+            puppet._add_to_cache()
+            return puppet
 
         if create:
-            puppet = cls(gsid)
+            puppet = cls(number)
             await puppet.insert()
+            puppet._add_to_cache()
             return puppet
 
         return None
 
     @classmethod
-    def get_by_mxid(cls, mxid: UserID, create: bool = True) -> Optional["Puppet"]:
-        gsid = cls.get_gsid_from_mxid(mxid)
-        if gsid:
-            return cls.get_by_gsid(gsid, create)
-
-        return None
+    def get_number_from_mxid(cls, mxid: UserID) -> str | None:
+        number = cls.mxid_template.parse(mxid)
+        if not number:
+            return None
+        return number
 
     @classmethod
-    def get_gsid_from_mxid(cls, mxid: UserID) -> Optional[GupshupUserID]:
-        parsed = cls.mxid_template.parse(mxid)
-        if parsed:
-            return GupshupUserID(cls.gsid_template.format_full(parsed))
+    async def get_by_mxid(cls, mxid: UserID, create: bool = True) -> Optional["Puppet"]:
+        number = cls.get_number_from_mxid(mxid)
+        if number:
+            return await cls.get_by_number(number, create)
         return None
-
 
     @classmethod
     @async_getter_lock
@@ -173,9 +158,8 @@ class Puppet(DBPuppet, BasePuppet):
         return cls.mxid_template.parse(mxid)
 
     @classmethod
-    def get_mxid_from_gsid(cls, gsid: GupshupUserID) -> UserID:
-        return UserID(cls.mxid_template.format_full(str(cls.gsid_template.parse(gsid))))
-
+    def get_mxid_from_number(cls, number: str) -> UserID:
+        return UserID(cls.mxid_template.format_full(number))
 
     @classmethod
     async def all_with_custom_mxid(cls) -> AsyncGenerator["Puppet", None]:
@@ -183,7 +167,7 @@ class Puppet(DBPuppet, BasePuppet):
         puppet: cls
         for index, puppet in enumerate(puppets):
             try:
-                yield cls.by_gsid[puppet.gsid]
+                yield cls.by_number[puppet.number]
             except KeyError:
                 puppet._add_to_cache()
                 yield puppet

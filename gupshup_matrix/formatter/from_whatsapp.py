@@ -118,7 +118,7 @@ async def _add_reply_header(
         event: MessageEvent = await main_intent.get_event(msg.mx_room, msg.mxid)
         if isinstance(event.content, TextMessageEventContent):
             event.content.trim_reply_fallback()
-        puppet = pu.get_by_mxid(event.sender, create=False)
+        puppet = await pu.get_by_mxid(event.sender, create=False)
         content.set_reply(event, displayname=puppet.displayname if puppet else event.sender)
         log.debug("Reply message created")
     except MatrixRequestError:

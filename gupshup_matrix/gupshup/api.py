@@ -63,4 +63,5 @@ class GupshupClient:
         self.log.debug(f"Sending message {data}")
         resp = await self.http.post(self.base_url, data=data)
         response_data = json.loads(await resp.text())
+        response_data["gs_app"] = self.app_name
         return response_data

@@ -1,14 +1,25 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, NamedTuple, Tuple
 
 from mautrix.bridge.config import BaseBridgeConfig, ConfigUpdateHelper
 from mautrix.types import UserID
+from mautrix.util.config import ForbiddenDefault, ForbiddenKey
 
+Permissions = NamedTuple("Permissions", relay=bool, user=bool, admin=bool, level=str)
 
 class Config(BaseBridgeConfig):
+
+    @property
+    def forbidden_defaults(self) -> List[ForbiddenDefault]:
+        return [
+            *super().forbidden_defaults,
+            ForbiddenDefault("appservice.database", "postgres://username:password@hostname/db"),
+            ForbiddenDefault("bridge.permissions", ForbiddenKey("example.com")),
+        ]
+
     def do_update(self, helper: ConfigUpdateHelper) -> None:
         super().do_update(helper)
 
-        copy, copy_dict = helper.copy, helper.copy_dict
+        copy, copy_dict, _ = helper
 
         copy("homeserver.public_address")
 
@@ -38,7 +49,8 @@ class Config(BaseBridgeConfig):
         level = self["bridge.permissions"].get(key, "")
         admin = level == "admin"
         user = level == "user" or admin
-        return user, admin
+        relay = level == "relay" or user
+        return relay, user, admin, level
 
     def get_permissions(self, mxid: UserID) -> Tuple[bool, bool]:
         permissions = self["bridge.permissions"] or {}
@@ -50,24 +62,3 @@ class Config(BaseBridgeConfig):
             return self._get_permissions(homeserver)
 
         return self._get_permissions("*")
-
-    @property
-    def namespaces(self) -> Dict[str, List[Dict[str, Any]]]:
-        homeserver = self["homeserver.domain"]
-
-        username_format = self["bridge.username_template"].lower().format(userid=".+")
-        group_id = (
-            {"group_id": self["appservice.community_id"]}
-            if self["appservice.community_id"]
-            else {}
-        )
-
-        return {
-            "users": [
-                {
-                    "exclusive": True,
-                    "regex": f"@{username_format}:{homeserver}",
-                    **group_id,
-                }
-            ],
-        }

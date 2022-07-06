@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 import asyncio
 from html import escape
 from string import Template
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
 
-from mautrix.appservice import IntentAPI
-from mautrix.bridge import BasePortal
+from mautrix.appservice import AppService, IntentAPI
+from mautrix.bridge import BasePortal, NotificationDisabler
+from mautrix.errors import MatrixError
 from mautrix.types import (
     EventID,
     EventType,
@@ -15,7 +18,6 @@ from mautrix.types import (
     MessageType,
     PowerLevelStateEventContent,
     RoomID,
-    StrippedStateEvent,
     TextMessageEventContent,
     UserID,
 )
@@ -26,6 +28,7 @@ from .db import Message as DBMessage
 from .db import Portal as DBPortal
 from .formatter import matrix_to_whatsapp, whatsapp_reply_to_matrix, whatsapp_to_matrix
 from .gupshup import (
+    GupshupApplication,
     GupshupClient,
     GupshupMessageEvent,
     GupshupMessageID,
@@ -37,11 +40,16 @@ from .gupshup import (
 if TYPE_CHECKING:
     from .__main__ import GupshupBridge
 
+StateBridge = EventType.find("m.bridge", EventType.Class.STATE)
+StateHalfShotBridge = EventType.find("uk.half-shot.bridge", EventType.Class.STATE)
 
 InviteList = Union[UserID, List[UserID]]
 
 
 class Portal(DBPortal, BasePortal):
+    by_mxid: Dict[RoomID, "Portal"] = {}
+    by_number: Dict[str, "Portal"] = {}
+
     homeserver_address: str
     google_maps_url: str
     message_template: Template
@@ -52,37 +60,22 @@ class Portal(DBPortal, BasePortal):
     auto_change_room_name: bool
     error_codes: Dict[str, Dict[str, Any]]
 
+    az: AppService
+    private_chat_portal_meta: bool
     gsc: GupshupClient
 
-    by_mxid: Dict[RoomID, "Portal"] = {}
-    by_gsid: Dict[GupshupUserID, "Portal"] = {}
-
-    gsid: GupshupUserID
-    mxid: Optional[RoomID]
-
-    _db_instance: DBPortal
-
-    _main_intent: Optional[IntentAPI]
+    _main_intent: Optional[IntentAPI] | None
     _create_room_lock: asyncio.Lock
-    _send_lock: asyncio.Lock
 
     def __init__(
-        self,
-        gsid: GupshupUserID,
-        mxid: Optional[RoomID] = None,
+        self, number: str, mxid: Optional[RoomID] = None, relay_user_id: UserID | None = None
     ) -> None:
-        super().__init__()
-        self.gsid = gsid
-        self.mxid = mxid
-
-        self._main_intent = None
+        super().__init__(number, mxid, relay_user_id)
+        BasePortal.__init__(self)
         self._create_room_lock = asyncio.Lock()
-        self._send_lock = asyncio.Lock()
-        self.log = self.log.getChild(self.gsid)
-
-        self.by_gsid[self.gsid] = self
-        if self.mxid:
-            self.by_mxid[self.mxid] = self
+        self.log = self.log.getChild(self.number)
+        self._main_intent = None
+        self._relay_user = None
 
     @property
     def main_intent(self) -> IntentAPI:
@@ -90,13 +83,18 @@ class Portal(DBPortal, BasePortal):
             raise ValueError("Portal must be postinit()ed before main_intent can be used")
         return self._main_intent
 
+    @property
+    def is_direct(self) -> bool:
+        return self.number is not None
+
+
     @classmethod
     def init_cls(cls, bridge: "GupshupBridge") -> None:
         cls.config = bridge.config
         cls.matrix = bridge.matrix
         cls.az = bridge.az
         cls.loop = bridge.loop
-        cls.bridge = bridge
+        BasePortal.bridge = bridge
         cls.private_chat_portal_meta = cls.config["bridge.private_chat_portal_meta"]
 
     def send_text_message(self, message: GupshupMessageEvent) -> Optional["Portal"]:
@@ -107,18 +105,6 @@ class Portal(DBPortal, BasePortal):
             content.formatted_body = html
         return self.main_intent.send_message(self.mxid, content)
 
-    async def verify_displayname(self, contact_name) -> None:
-        puppet = p.Puppet.get_by_gsid(self.gsid)
-        client_displayname = await puppet.get_displayname()
-        if client_displayname.isdigit():
-            room_name = f"{contact_name} ({puppet.phone_number})"
-            await self.main_intent.set_room_name(room_id=self.mxid, name=room_name)
-        else:
-            if self.auto_change_room_name:
-                room_name = f"{contact_name} ({puppet.phone_number})"
-                await self.main_intent.set_room_name(room_id=self.mxid, name=room_name)
-
-        await puppet.update_displayname(contact_name)
 
     async def create_matrix_room(self, message: GupshupMessageEvent = None) -> RoomID:
         if self.mxid:
@@ -131,38 +117,130 @@ class Portal(DBPortal, BasePortal):
 
     async def _create_matrix_room(self, message: GupshupMessageEvent = None) -> RoomID:
         self.log.debug("Creating Matrix room")
-        puppet = p.Puppet.get_by_gsid(self.gsid)
-        room_name = puppet.formatted_phone_number
-        await puppet.update_displayname()
-        creation_content = {"m.federate": self.federate_rooms}
-        initial_state = {
-            EventType.find(event_type): StrippedStateEvent.deserialize(
-                {"type": event_type, "state_key": "", "content": content}
-            )
-            for event_type, content in self.initial_state.items()
-        }
-        if EventType.ROOM_POWER_LEVELS not in initial_state:
-            initial_state[EventType.ROOM_POWER_LEVELS] = StrippedStateEvent(
-                type=EventType.ROOM_POWER_LEVELS, content=PowerLevelStateEventContent()
-            )
-        plc = initial_state[EventType.ROOM_POWER_LEVELS].content
-        plc.users[self.az.bot_mxid] = 100
-        plc.users[self.main_intent.mxid] = 100
-        for user_id in self.invite_users:
-            plc.users.setdefault(user_id, 100)
+        if not self.config["bridge.federate_rooms"]:
+            creation_content["m.federate"] = False
+        power_levels = await self._get_power_levels(is_initial=True)
+        initial_state = [
+            {
+                "type": str(StateBridge),
+                "state_key": self.bridge_info_state_key,
+                "content": self.bridge_info,
+            },
+            # TODO remove this once https://github.com/matrix-org/matrix-doc/pull/2346 is in spec
+            {
+                "type": str(StateHalfShotBridge),
+                "state_key": self.bridge_info_state_key,
+                "content": self.bridge_info,
+            },
+            {
+                "type": str(EventType.ROOM_POWER_LEVELS),
+                "content": power_levels.serialize(),
+            },
+        ]
+        invites = []
+        creation_content = {}
+        if not self.config["bridge.federate_rooms"]:
+            creation_content["m.federate"] = False
         self.mxid = await self.main_intent.create_room(
-            name=room_name,
-            invitees=[self.az.bot_mxid, *self.invite_users],
+            name=f"{message.payload.sender.name} ({self.number})",
+            is_direct=self.is_direct,
+            initial_state=initial_state,
+            invitees=invites,
             creation_content=creation_content,
-            initial_state=list(initial_state.values()),
+            # Make sure the power level event in initial_state is allowed
+            # even if the server sends a default power level event before it.
+            # TODO remove this if the spec is changed to require servers to
+            #      use the power level event in initial_state
+            power_level_override={"users": {self.main_intent.mxid: 9001}},
         )
         if not self.mxid:
-            raise Exception("Failed to create room: no mxid received")
-        self.save()
+            raise Exception("Failed to create room: no mxid returned")
+
+        puppet: p.Puppet = await p.Puppet.get_by_number(self.number)
+        await self.main_intent.invite_user(
+            self.mxid, puppet.mxid, extra_content=self._get_invite_content(puppet)
+        )
+        if puppet:
+            try:
+                await puppet.intent.join_room_by_id(self.mxid)
+            except MatrixError:
+                self.log.debug(
+                    "Failed to join custom puppet into newly created portal", exc_info=True
+                )
+
         self.log.debug(f"Matrix room created: {self.mxid}")
         self.by_mxid[self.mxid] = self
-        await self.main_intent.join_room_by_id(self.mxid)
         return self.mxid
+
+    def _get_invite_content(self, double_puppet: p.Puppet | None) -> dict[str, Any]:
+        invite_content = {}
+        if double_puppet:
+            invite_content["fi.mau.will_auto_accept"] = True
+        if self.is_direct:
+            invite_content["is_direct"] = True
+        return invite_content
+
+    async def _get_power_levels(
+        self, levels: PowerLevelStateEventContent | None = None, is_initial: bool = False
+    ) -> PowerLevelStateEventContent:
+        levels = levels or PowerLevelStateEventContent()
+        levels.events_default = 0
+        if self.is_direct:
+            levels.ban = 99
+            levels.kick = 99
+            levels.invite = 99
+            levels.state_default = 0
+            meta_edit_level = 0
+        levels.events[EventType.REACTION] = 0
+        levels.events[EventType.ROOM_NAME] = meta_edit_level
+        levels.events[EventType.ROOM_AVATAR] = meta_edit_level
+        levels.events[EventType.ROOM_TOPIC] = meta_edit_level
+        levels.events[EventType.ROOM_ENCRYPTION] = 50 if self.matrix.e2ee else 99
+        levels.events[EventType.ROOM_TOMBSTONE] = 99
+        levels.users_default = 0
+        # Remote delete is only for your own messages
+        levels.redact = 99
+        if self.main_intent.mxid not in levels.users:
+            levels.users[self.main_intent.mxid] = 9001 if is_initial else 100
+        return levels
+
+    @property
+    def bridge_info_state_key(self) -> str:
+        return f"com.github.gupshup://gupshup/{self.number}"
+
+    @property
+    def bridge_info(self) -> Dict[str, Any]:
+        return {
+            "bridgebot": self.az.bot_mxid,
+            "creator": self.main_intent.mxid,
+            "protocol": {
+                "id": "facebook",
+                "displayname": "Gupshup Bridge",
+                "avatar_url": self.config["appservice.bot_avatar"],
+            },
+            "channel": {
+                "id": str(self.number),
+                "displayname": None,
+                "avatar_url": None,
+            },
+        }
+
+    async def delete(self) -> None:
+        # if self.mxid:
+        #     await DBMessage.delete_all_by_room(self.mxid)
+        # self.by_fbid.pop(self.fbid_full, None)
+        # self.by_mxid.pop(self.mxid, None)
+        # await super().delete()
+        pass
+
+    async def get_dm_puppet(self) -> p.Puppet | None:
+        if not self.is_direct:
+            return None
+        return await p.Puppet.get_by_number(self.number)
+
+    async def save(self) -> None:
+        # await self.update()
+        pass
 
     async def handle_gupshup_message(self, message: GupshupMessageEvent) -> None:
         if not await self.create_matrix_room(message):
@@ -170,9 +248,6 @@ class Portal(DBPortal, BasePortal):
 
         mxid = None
         msgtype = MessageType.TEXT
-
-        if message.payload.sender.name:
-            await self.verify_displayname(message.payload.sender.name)
 
         if message.payload.body.url:
             resp = await self.az.http_session.get(message.payload.body.url)
@@ -248,7 +323,7 @@ class Portal(DBPortal, BasePortal):
 
             body = message.payload.body.text
 
-            evt = DBMessage.get_by_gsid(gsid=mgs_id, gs_receiver=self.gsid)
+            evt = DBMessage.get_by_gsid(number=mgs_id, gs_receiver=self.number)
             if evt:
                 content = await whatsapp_reply_to_matrix(body, evt, self.main_intent, self.log)
                 content.external_url = content.external_url
@@ -265,24 +340,31 @@ class Portal(DBPortal, BasePortal):
         if not mxid:
             mxid = await self.main_intent.send_notice(self.mxid, "Contenido no aceptado")
 
+        sender: UserID = p.Puppet.get_mxid_from_number(message.payload.sender.phone)
+
         msg = DBMessage(
-            mxid=mxid, mx_room=self.mxid, gs_receiver=self.gsid, gsid=message.payload.id
+            mxid=mxid,
+            mx_room=self.mxid,
+            sender=sender,
+            receiver=self.relay_user_id,
+            gsid=message.payload.id,
+            gs_app=message.app,
         )
-        msg.insert()
+        await msg.insert()
 
     async def handle_gupshup_status(self, status: GupshupStatusEvent) -> None:
         if not self.mxid:
             return
         async with self._send_lock:
-            msg = DBMessage.get_by_gsid(status.id, self.gsid)
+            msg = DBMessage.get_by_gsid(status.id, self.number)
             if status.type == GupshupMessageStatus.DELIVERED:
-                msg = DBMessage.get_by_gsid(status.gsid, self.gsid)
+                msg = DBMessage.get_by_gsid(status.number, self.number)
                 if msg:
                     await self.az.intent.mark_read(self.mxid, msg.mxid)
                 else:
                     self.log.debug(f"Ignoring the null message")
             elif status.type == GupshupMessageStatus.READ:
-                msg = DBMessage.get_by_gsid(status.gsid, self.gsid)
+                msg = DBMessage.get_by_gsid(status.number, self.number)
                 if msg:
                     await self.main_intent.mark_read(self.mxid, msg.mxid)
                 else:
@@ -306,110 +388,107 @@ class Portal(DBPortal, BasePortal):
         is_gupshup_template: bool = False,
         additional_data: Optional[dict] = None,
     ) -> None:
-        async with self._send_lock:
-            if message.msgtype == MessageType.TEXT or (
-                message.msgtype == MessageType.NOTICE and self.bridge_notices
-            ):
-                localpart, _ = self.az.intent.parse_user_id(sender.mxid)
+        orig_sender = sender
+        sender, is_relay = await self.get_relay_sender(sender, f"message {event_id}")
+        if is_relay:
+            await self.apply_relay_message_format(orig_sender, message)
 
-                if message.format == Format.HTML:
-                    # only font styles from element
-                    html = message.formatted_body
-                else:
-                    html = escape(message.body)
-                    html = html.replace("\n", "<br />")
+        if message.get_reply_to():
+            await DBMessage.get_by_mxid(message.get_reply_to(), self.mxid)
 
-                if not is_gupshup_template:
-                    # if it's not a gupshup template messages can be sent with displayname
-                    displayname = await self.az.intent.get_room_displayname(self.mxid, sender.mxid)
-                    html = self.message_template.safe_substitute(
-                        message=html,
-                        mxid=sender.mxid,
-                        localpart=localpart,
-                        displayname=displayname,
-                    )
+        if message.msgtype in (MessageType.TEXT, MessageType.NOTICE):
+            text = matrix_to_whatsapp(html)
 
-                text = matrix_to_whatsapp(html)
-
-                if additional_data:
-                    resp = await self.gsc.send_message(
-                        self.gsid,
-                        additional_data=additional_data,
-                    )
-                else:
-                    resp = await self.gsc.send_message(
-                        self.gsid,
-                        body=text,
-                        is_gupshup_template=is_gupshup_template,
-                    )
-
-            elif message.msgtype in (
-                MessageType.AUDIO,
-                MessageType.VIDEO,
-                MessageType.IMAGE,
-                MessageType.FILE,
-            ):
-                url = f"{self.homeserver_address}/_matrix/media/r0/download/{message.url[6:]}"
-                resp = await self.gsc.send_message(
-                    self.gsid, media=url, body=message.body, msgtype=message.msgtype
-                )
-            elif message.msgtype == MessageType.LOCATION:
-                resp = await self.gsc.send_location(
-                    self.gsid, body=message.body, additional_data=additional_data
-                )
-
+            if message.format == Format.HTML:
+                # only font styles from element
+                html = message.formatted_body
             else:
-                self.log.debug(f"Ignoring unknown message {message}")
-                return
-            self.log.debug(f"Gupshup send response: {resp}")
-            DBMessage(
-                mxid=event_id,
-                mx_room=self.mxid,
-                gs_receiver=self.gsid,
-                gsid=GupshupMessageID(resp.get("messageId")),
-            ).insert()
+                html = escape(message.body)
+                html = html.replace("\n", "<br />")
+
+            if additional_data:
+                resp = await self.gsc.send_message(
+                    self.number,
+                    additional_data=additional_data,
+                )
+            else:
+                resp = await self.gsc.send_message(
+                    self.number,
+                    body=text,
+                    is_gupshup_template=is_gupshup_template,
+                )
+
+        elif message.msgtype in (
+            MessageType.AUDIO,
+            MessageType.VIDEO,
+            MessageType.IMAGE,
+            MessageType.FILE,
+        ):
+            url = f"{self.homeserver_address}/_matrix/media/r0/download/{message.url[6:]}"
+            resp = await self.gsc.send_message(
+                self.number, media=url, body=message.body, msgtype=message.msgtype
+            )
+        elif message.msgtype == MessageType.LOCATION:
+            resp = await self.gsc.send_location(
+                self.number, body=message.body, additional_data=additional_data
+            )
+
+        else:
+            self.log.debug(f"Ignoring unknown message {message}")
+            return
+        self.log.debug(f"Gupshup send response: {resp}")
+
+        receiver: UserID = p.Puppet.get_mxid_from_number(self.number)
+
+        DBMessage(
+            mxid=event_id,
+            mx_room=self.mxid,
+            sender=self.relay_user_id,
+            receiver=receiver,
+            gsid=GupshupMessageID(resp.get("messageId")),
+            gs_app=GupshupApplication(resp.get("gs_app")),
+        ).insert()
+
+    async def postinit(self) -> None:
+        self.by_number[self.number] = self
+        if self.mxid:
+            self.by_mxid[self.mxid] = self
+
+        self._main_intent = (
+            (await p.Puppet.get_by_number(self.number)).default_mxid_intent
+            if self.is_direct
+            else self.az.intent
+        )
 
     @classmethod
-    def get_by_mxid(cls, mxid: RoomID) -> Optional["Portal"]:
+    async def get_by_mxid(cls, mxid: RoomID) -> Optional["Portal"]:
         try:
             return cls.by_mxid[mxid]
         except KeyError:
             pass
 
-        db_portal = DBPortal.get_by_mxid(mxid)
-        if db_portal:
-            return cls.from_db(db_portal)
-
-        return None
-
-    @classmethod
-    def get_by_gsid(cls, gsid: GupshupUserID, create: bool = True) -> Optional["Portal"]:
-        try:
-            return cls.by_gsid[gsid]
-        except KeyError:
-            pass
-
-        db_portal = DBPortal.get_by_gsid(gsid)
-        if db_portal:
-            return cls.from_db(db_portal)
-
-        if create:
-            portal = cls(gsid=gsid)
-            portal.db_instance.insert()
+        portal = cast(cls, await super().get_by_mxid(mxid))
+        if portal:
             return portal
 
         return None
 
+    @classmethod
+    async def get_by_number(cls, number: str, create: bool = True) -> Optional["Portal"]:
+        try:
+            return cls.by_number[number]
+        except KeyError:
+            pass
 
-# def init(context: "Context") -> None:
-#     Portal.az, config, Portal.loop = context.core
-#     Portal.gsc = context.gsc
-#     Portal.homeserver_address = config["homeserver.public_address"]
-#     Portal.google_maps_url = config["bridge.google_maps_url"]
-#     Portal.message_template = Template(config["bridge.message_template"])
-#     Portal.bridge_notices = config["bridge.bridge_notices"]
-#     Portal.federate_rooms = config["bridge.federate_rooms"]
-#     Portal.invite_users = config["bridge.invite_users"]
-#     Portal.initial_state = config["bridge.initial_state"]
-#     Portal.auto_change_room_name = config["bridge.auto_change_room_name"]
-#     Portal.error_codes = config["gupshup.error_codes"]
+        portal = cast(cls, await super().get_by_number(number))
+        if portal:
+            await portal.postinit()
+            return portal
+
+        if create:
+            portal = cls(number=number)
+            await portal.insert()
+            await portal.postinit()
+            return portal
+
+        return None

@@ -33,7 +33,7 @@ async def pm(evt: CommandEvent) -> EventID:
     except ValueError:
         return await evt.reply("Invalid phone number.")
 
-    portal = po.Portal.get_by_gsid(gsid=phone_number)
+    portal = po.Portal.get_by_number(gsid=phone_number)
 
     if portal.mxid:
         return await evt.reply(

@@ -55,7 +55,7 @@ class GupshupHandler:
         data, err = await self._validate_request(data, GupshupMessageEvent)
         if err is not None:
             self.log.error(f"Error handling incoming message: {err}")
-        portal = po.Portal.get_by_gsid(data.payload.sender.phone)
+        portal: po.Portal = await po.Portal.get_by_number(data.payload.sender.phone)
         await portal.handle_gupshup_message(data)
         return web.Response(status=204)
 
@@ -64,6 +64,6 @@ class GupshupHandler:
         data, err = await self._validate_request(data, GupshupStatusEvent)
         if err is not None:
             self.log.error(f"Error handling incoming message: {err}")
-        portal = po.Portal.get_by_gsid(data.payload.destination)
+        portal: po.Portal = await po.Portal.get_by_number(data.payload.destination)
         await portal.handle_gupshup_status(data.payload)
         return web.Response(status=204)

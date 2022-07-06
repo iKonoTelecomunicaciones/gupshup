@@ -27,23 +27,20 @@ class GupshupBridge(Bridge):
     gupshup: GupshupHandler
     gupshup_client: GupshupClient
 
-    def preinit(self) -> None:
-        super().preinit()
-
     def prepare_db(self) -> None:
         super().prepare_db()
         init_db(self.db)
 
     def prepare_bridge(self) -> None:
+        self.gupshup = GupshupHandler(config=self.config, loop=self.loop)
         super().prepare_bridge()
         self.gupshup_client = GupshupClient(config=self.config, loop=self.loop)
-        self.gupshup = GupshupHandler(config=self.config, loop=self.loop)
         self.az.app.add_subapp(self.config["gupshup.webhook_path"], self.gupshup.app)
 
     async def start(self) -> None:
+        User.init_cls(self)
         self.add_startup_actions(Puppet.init_cls(self))
         Portal.init_cls(self)
-        User.init_cls(self)
         await super().start()
 
     def prepare_stop(self) -> None:
@@ -51,14 +48,14 @@ class GupshupBridge(Bridge):
         for puppet in Puppet.by_custom_mxid.values():
             puppet.stop()
 
+    async def get_user(self, user_id: UserID) -> User:
+        return await User.get_by_mxid(user_id)
+
     async def get_portal(self, room_id: RoomID) -> Portal:
         return await Portal.get_by_mxid(room_id)
 
     async def get_puppet(self, user_id: UserID, create: bool = False) -> Puppet:
         return await Puppet.get_by_mxid(user_id, create=create)
-
-    async def get_user(self, user_id: UserID, create: bool = True) -> User:
-        return await User.get_by_mxid(user_id, create=create)
 
     async def get_double_puppet(self, user_id: UserID) -> Puppet:
         return await Puppet.get_by_custom_mxid(user_id)
