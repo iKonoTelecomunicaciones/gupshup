@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from mautrix.appservice import AppService
 from mautrix.bridge import BaseUser
-from mautrix.types import RoomID, UserID
+from mautrix.types import UserID
 
 from . import portal as po
 from . import puppet as pu
@@ -48,7 +48,7 @@ class User(BaseUser):
         cls.loop = bridge.loop
 
     async def get_portal_with(self, puppet: pu.Puppet, create: bool = True) -> po.Portal | None:
-        return await po.Portal.get_by_number(puppet.number, create=create)
+        return await po.Portal.get_by_chat_id(puppet.number, create=create)
 
     async def is_logged_in(self) -> bool:
         return True

@@ -6,7 +6,7 @@ from aiohttp import web
 
 from .. import portal as po
 from ..config import Config
-from .data import GupshupEventType, GupshupMessageEvent, GupshupStatusEvent
+from .data import GupshupApplication, GupshupEventType, GupshupMessageEvent, GupshupStatusEvent
 
 
 class GupshupHandler:
@@ -50,12 +50,18 @@ class GupshupHandler:
             self.log.debug(f"Integration type not supported.")
             return web.Response(status=406)
 
+    def generate_chat_id(self, gs_app: GupshupApplication, number: str) -> str:
+        return f"{gs_app}-{number}"
+
     async def message_event(self, data: Dict) -> web.Response:
         self.log.debug(f"Received Gupshup message event: {data}")
         data, err = await self._validate_request(data, GupshupMessageEvent)
+        data: GupshupMessageEvent = data
         if err is not None:
             self.log.error(f"Error handling incoming message: {err}")
-        portal: po.Portal = await po.Portal.get_by_number(data.payload.sender.phone)
+        portal: po.Portal = await po.Portal.get_by_chat_id(
+            self.generate_chat_id(gs_app=data.app, number=data.payload.sender.phone)
+        )
         await portal.handle_gupshup_message(data)
         return web.Response(status=204)
 
@@ -64,6 +70,6 @@ class GupshupHandler:
         data, err = await self._validate_request(data, GupshupStatusEvent)
         if err is not None:
             self.log.error(f"Error handling incoming message: {err}")
-        portal: po.Portal = await po.Portal.get_by_number(data.payload.destination)
+        portal: po.Portal = await po.Portal.get_by_chat_id(data.payload.destination)
         await portal.handle_gupshup_status(data.payload)
         return web.Response(status=204)

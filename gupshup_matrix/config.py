@@ -1,13 +1,14 @@
-from typing import Any, Dict, List, NamedTuple, Tuple
+from typing import List, NamedTuple
 
 from mautrix.bridge.config import BaseBridgeConfig, ConfigUpdateHelper
+from mautrix.client import Client
 from mautrix.types import UserID
 from mautrix.util.config import ForbiddenDefault, ForbiddenKey
 
 Permissions = NamedTuple("Permissions", relay=bool, user=bool, admin=bool, level=str)
 
-class Config(BaseBridgeConfig):
 
+class Config(BaseBridgeConfig):
     @property
     def forbidden_defaults(self) -> List[ForbiddenDefault]:
         return [
@@ -27,11 +28,13 @@ class Config(BaseBridgeConfig):
 
         copy("bridge.username_template")
         copy("bridge.displayname_template")
-        copy("bridge.auto_change_room_name")
+        copy("bridge.private_chat_name_template")
         copy("bridge.command_prefix")
         copy("bridge.google_maps_url")
 
-        copy("bridge.invite_users")
+        copy("bridge.periodic_reconnect.interval")
+        copy("bridge.periodic_reconnect.resync")
+        copy("bridge.periodic_reconnect.always")
 
         copy("bridge.federate_rooms")
         copy("bridge.initial_state")
@@ -45,19 +48,19 @@ class Config(BaseBridgeConfig):
         copy("gupshup.webhook_path")
         copy("gupshup.error_codes")
 
-    def _get_permissions(self, key: str) -> Tuple[bool, bool]:
+    def _get_permissions(self, key: str) -> Permissions:
         level = self["bridge.permissions"].get(key, "")
         admin = level == "admin"
         user = level == "user" or admin
         relay = level == "relay" or user
-        return relay, user, admin, level
+        return Permissions(relay, user, admin, level)
 
-    def get_permissions(self, mxid: UserID) -> Tuple[bool, bool]:
-        permissions = self["bridge.permissions"] or {}
+    def get_permissions(self, mxid: UserID) -> Permissions:
+        permissions = self["bridge.permissions"]
         if mxid in permissions:
             return self._get_permissions(mxid)
 
-        homeserver = mxid[mxid.index(":") + 1 :]
+        _, homeserver = Client.parse_user_id(mxid)
         if homeserver in permissions:
             return self._get_permissions(homeserver)
 

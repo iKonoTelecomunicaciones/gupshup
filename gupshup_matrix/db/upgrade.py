@@ -8,7 +8,8 @@ upgrade_table = UpgradeTable()
 async def upgrade_v1(conn: Connection) -> None:
     await conn.execute(
         """CREATE TABLE portal (
-        number          TEXT PRIMARY KEY,
+        chat_id          TEXT PRIMARY KEY,
+        number          TEXT,
         mxid            TEXT,
         relay_user_id   TEXT
     )"""
@@ -40,7 +41,7 @@ async def upgrade_v1(conn: Connection) -> None:
         """CREATE TABLE gupshup_application (
         name            TEXT PRIMARY KEY,
         app_id          TEXT,
-        phone_number    TEXT NOT NULL
+        phone_number    TEXT
     )"""
     )
     # The names of gupshup applications are unique to your platform.

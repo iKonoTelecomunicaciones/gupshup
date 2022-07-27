@@ -1,7 +1,7 @@
 from mautrix.bridge import Bridge
 from mautrix.types import RoomID, UserID
 
-from . import __version__, commands
+from . import commands
 from .config import Config
 from .db import init as init_db
 from .db import upgrade_table
@@ -10,6 +10,7 @@ from .matrix import MatrixHandler
 from .portal import Portal
 from .puppet import Puppet
 from .user import User
+from .version import linkified_version, version
 
 
 class GupshupBridge(Bridge):
@@ -18,7 +19,8 @@ class GupshupBridge(Bridge):
     command = "python -m gupshup-matrix"
     description = "A Matrix-Gupshup relaybot bridge."
     repo_url = "https://github.com/bramenn/gupshup"
-    version = __version__
+    version = version
+    markdown_version = linkified_version
     config_class = Config
     matrix_class = MatrixHandler
     upgrade_table = upgrade_table
@@ -26,6 +28,9 @@ class GupshupBridge(Bridge):
     config: Config
     gupshup: GupshupHandler
     gupshup_client: GupshupClient
+
+    def preinit(self) -> None:
+        super().preinit()
 
     def prepare_db(self) -> None:
         super().prepare_db()

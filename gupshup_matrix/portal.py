@@ -6,7 +6,7 @@ from string import Template
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
 
 from mautrix.appservice import AppService, IntentAPI
-from mautrix.bridge import BasePortal, NotificationDisabler
+from mautrix.bridge import BasePortal
 from mautrix.errors import MatrixError
 from mautrix.types import (
     EventID,
@@ -24,6 +24,7 @@ from mautrix.types import (
 
 from . import puppet as p
 from . import user as u
+from .db import GupshupApplication as DBGupshupApplication
 from .db import Message as DBMessage
 from .db import Portal as DBPortal
 from .formatter import matrix_to_whatsapp, whatsapp_reply_to_matrix, whatsapp_to_matrix
@@ -34,7 +35,6 @@ from .gupshup import (
     GupshupMessageID,
     GupshupMessageStatus,
     GupshupStatusEvent,
-    GupshupUserID,
 )
 
 if TYPE_CHECKING:
@@ -48,7 +48,8 @@ InviteList = Union[UserID, List[UserID]]
 
 class Portal(DBPortal, BasePortal):
     by_mxid: Dict[RoomID, "Portal"] = {}
-    by_number: Dict[str, "Portal"] = {}
+    by_chat_id: Dict[RoomID, "Portal"] = {}
+    by_chat_id: Dict[str, "Portal"] = {}
 
     homeserver_address: str
     google_maps_url: str
@@ -68,12 +69,16 @@ class Portal(DBPortal, BasePortal):
     _create_room_lock: asyncio.Lock
 
     def __init__(
-        self, number: str, mxid: Optional[RoomID] = None, relay_user_id: UserID | None = None
+        self,
+        chat_id: str,
+        number: Optional[str] = None,
+        mxid: Optional[RoomID] = None,
+        relay_user_id: UserID | None = None,
     ) -> None:
-        super().__init__(number, mxid, relay_user_id)
+        super().__init__(chat_id, number, mxid, relay_user_id)
         BasePortal.__init__(self)
         self._create_room_lock = asyncio.Lock()
-        self.log = self.log.getChild(self.number)
+        self.log = self.log.getChild(self.chat_id or self.number)
         self._main_intent = None
         self._relay_user = None
 
@@ -86,7 +91,6 @@ class Portal(DBPortal, BasePortal):
     @property
     def is_direct(self) -> bool:
         return self.number is not None
-
 
     @classmethod
     def init_cls(cls, bridge: "GupshupBridge") -> None:
@@ -105,12 +109,25 @@ class Portal(DBPortal, BasePortal):
             content.formatted_body = html
         return self.main_intent.send_message(self.mxid, content)
 
+    async def register_gs_app(self, gs_app: GupshupApplication):
+
+        if await DBGupshupApplication.get_by_name(gs_app):
+            return
+
+        self.log.debug(f"Registering {gs_app} GupshupApplication")
+
+        try:
+            await DBGupshupApplication.insert(name=gs_app, app_id=None, phone_number=None)
+        except Exception as e:
+            self.log.exception(f"Error registering {gs_app} {e}")
 
     async def create_matrix_room(self, message: GupshupMessageEvent = None) -> RoomID:
+        await self.register_gs_app(gs_app=message.app)
         if self.mxid:
             return self.mxid
         async with self._create_room_lock:
             try:
+                self.number = message.payload.sender.phone
                 return await self._create_matrix_room(message)
             except Exception:
                 self.log.exception("Failed to create portal")
@@ -156,6 +173,7 @@ class Portal(DBPortal, BasePortal):
         if not self.mxid:
             raise Exception("Failed to create room: no mxid returned")
 
+        self.log.debug(self.number)
         puppet: p.Puppet = await p.Puppet.get_by_number(self.number)
         await self.main_intent.invite_user(
             self.mxid, puppet.mxid, extra_content=self._get_invite_content(puppet)
@@ -167,7 +185,7 @@ class Portal(DBPortal, BasePortal):
                 self.log.debug(
                     "Failed to join custom puppet into newly created portal", exc_info=True
                 )
-
+        await self.update()
         self.log.debug(f"Matrix room created: {self.mxid}")
         self.by_mxid[self.mxid] = self
         return self.mxid
@@ -185,12 +203,11 @@ class Portal(DBPortal, BasePortal):
     ) -> PowerLevelStateEventContent:
         levels = levels or PowerLevelStateEventContent()
         levels.events_default = 0
-        if self.is_direct:
-            levels.ban = 99
-            levels.kick = 99
-            levels.invite = 99
-            levels.state_default = 0
-            meta_edit_level = 0
+        levels.ban = 99
+        levels.kick = 99
+        levels.invite = 99
+        levels.state_default = 0
+        meta_edit_level = 0
         levels.events[EventType.REACTION] = 0
         levels.events[EventType.ROOM_NAME] = meta_edit_level
         levels.events[EventType.ROOM_AVATAR] = meta_edit_level
@@ -450,7 +467,7 @@ class Portal(DBPortal, BasePortal):
         ).insert()
 
     async def postinit(self) -> None:
-        self.by_number[self.number] = self
+        self.by_chat_id[self.number] = self
         if self.mxid:
             self.by_mxid[self.mxid] = self
 
@@ -474,19 +491,19 @@ class Portal(DBPortal, BasePortal):
         return None
 
     @classmethod
-    async def get_by_number(cls, number: str, create: bool = True) -> Optional["Portal"]:
+    async def get_by_chat_id(cls, chat_id: str, create: bool = True) -> Optional["Portal"]:
         try:
-            return cls.by_number[number]
+            return cls.by_chat_id[chat_id]
         except KeyError:
             pass
 
-        portal = cast(cls, await super().get_by_number(number))
+        portal = cast(cls, await super().get_by_chat_id(chat_id))
         if portal:
             await portal.postinit()
             return portal
 
         if create:
-            portal = cls(number=number)
+            portal = cls(chat_id)
             await portal.insert()
             await portal.postinit()
             return portal

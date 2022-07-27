@@ -55,6 +55,7 @@ class Puppet(DBPuppet, BasePuppet):
         self.log = self.log.getChild(self.number)
 
         self.default_mxid = self.get_mxid_from_number(self.number)
+        self.custom_mxid = self.default_mxid
         self.default_mxid_intent = self.az.intent.user(self.default_mxid)
 
         self.intent = self._fresh_intent()
@@ -87,7 +88,6 @@ class Puppet(DBPuppet, BasePuppet):
             self.by_number[self.number] = self
         if self.custom_mxid:
             self.by_custom_mxid[self.custom_mxid] = self
-
 
     @property
     def mxid(self) -> UserID:
