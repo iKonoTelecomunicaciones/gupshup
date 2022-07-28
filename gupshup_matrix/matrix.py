@@ -26,7 +26,7 @@ class MatrixHandler(BaseMatrixHandler):
         if not portal:
             return
 
-        user = await u.User.get_by_mxid(user_id, create=False)
+        user = await u.User.get_by_mxid(user_id)
         if not user:
             return
 
@@ -45,7 +45,7 @@ class MatrixHandler(BaseMatrixHandler):
     async def handle_invite(
         self, room_id: RoomID, user_id: UserID, inviter: u.User, event_id: EventID
     ) -> None:
-        user = await u.User.get_by_mxid(user_id, create=False)
+        user = await u.User.get_by_mxid(user_id)
         if not user or not await user.is_logged_in():
             return
         portal = await po.Portal.get_by_mxid(room_id)

@@ -292,7 +292,7 @@ class Portal(DBPortal, BasePortal):
         if message.payload.body.url:
             resp = await self.az.http_session.get(message.payload.body.url)
             data = await resp.read()
-            mxc = await self.main_intent.upload_media(data)
+            mxc = await self.main_intent.upload_media(data=data)
 
             if message.payload.type in ("image", "video"):
                 msgtype = (
@@ -363,7 +363,7 @@ class Portal(DBPortal, BasePortal):
 
             body = message.payload.body.text
 
-            evt = DBMessage.get_by_gsid(number=mgs_id)
+            evt = await DBMessage.get_by_gsid(gsid=mgs_id)
             if evt:
                 content = await whatsapp_reply_to_matrix(body, evt, self.main_intent, self.log)
                 content.external_url = content.external_url
@@ -398,10 +398,7 @@ class Portal(DBPortal, BasePortal):
         async with self._send_lock:
             msg = await DBMessage.get_by_gsid(status.gsid)
             if status.type == GupshupMessageStatus.DELIVERED:
-                if msg:
-                    await self.az.intent.mark_read(self.mxid, msg.mxid)
-                else:
-                    self.log.debug(f"Ignoring the null message")
+                pass
             elif status.type == GupshupMessageStatus.READ:
                 if msg:
                     await self.main_intent.mark_read(self.mxid, msg.mxid)
@@ -482,15 +479,17 @@ class Portal(DBPortal, BasePortal):
         ).insert()
 
     async def postinit(self) -> None:
-        self.by_chat_id[self.number] = self
         if self.mxid:
             self.by_mxid[self.mxid] = self
 
-        self._main_intent = (
-            (await p.Puppet.get_by_number(self.number)).default_mxid_intent
-            if self.is_direct
-            else self.az.intent
-        )
+        if self.number:
+            self.by_mxid[self.number] = self
+
+        if self.is_direct:
+            puppet = await self.get_dm_puppet()
+            self._main_intent = puppet.default_mxid_intent
+        elif not self.is_direct:
+            self._main_intent = self.az.intent
 
     @classmethod
     async def get_by_mxid(cls, mxid: RoomID) -> Optional["Portal"]:
@@ -512,13 +511,17 @@ class Portal(DBPortal, BasePortal):
         except KeyError:
             pass
 
+        _, phone = chat_id.split("-")
+
         portal = cast(cls, await super().get_by_chat_id(chat_id))
         if portal:
+            portal.number = phone
             await portal.postinit()
             return portal
 
         if create:
             portal = cls(chat_id)
+            portal.number = phone
             await portal.insert()
             await portal.postinit()
             return portal

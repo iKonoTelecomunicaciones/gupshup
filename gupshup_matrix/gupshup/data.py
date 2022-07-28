@@ -29,6 +29,7 @@ class GupshupMessageStatus(str):
 class GupshupMessageData(SerializableAttrs):
     text: str = attr.ib(default=None, metadata={"json": "text"})
     url: str = attr.ib(default=None, metadata={"json": "url"})
+    content_type: str = attr.ib(default=None, metadata={"json": "contentType"})
     caption: str = attr.ib(default=None, metadata={"json": "caption"})
     latitude: str = attr.ib(default=None, metadata={"json": "latitude"})
     longitude: str = attr.ib(default=None, metadata={"json": "longitude"})
