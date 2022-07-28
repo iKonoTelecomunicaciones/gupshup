@@ -1,19 +1,99 @@
-from typing import TYPE_CHECKING, Optional
+from __future__ import annotations
 
-from mautrix.util.db import Base
-from sqlalchemy import Boolean, Column, String
-from sqlalchemy.sql import expression
+from typing import TYPE_CHECKING, ClassVar
 
-if TYPE_CHECKING:
-    from ..gupshup import GupshupUserID
+import asyncpg
+from attr import dataclass
+from mautrix.types import SyncToken, UserID
+from mautrix.util.async_db import Database
+from yarl import URL
+
+fake_db = Database.create("") if TYPE_CHECKING else None
 
 
-class Puppet(Base):
-    __tablename__ = "puppet"
+@dataclass
+class Puppet:
+    db: ClassVar[Database] = fake_db
 
-    gsid: "GupshupUserID" = Column(String(127), primary_key=True)
-    matrix_registered: bool = Column(Boolean, nullable=False, server_default=expression.false())
+    number: str
+    name: str | None
+
+    is_registered: bool
+
+    custom_mxid: UserID | None
+    access_token: str | None
+    next_batch: SyncToken | None
+    base_url: URL | None
+
+    @property
+    def _values(self):
+        return (
+            self.number,
+            self.name,
+            self.is_registered,
+            self.custom_mxid,
+            self.access_token,
+            self.next_batch,
+            str(self.base_url) if self.base_url else None,
+        )
 
     @classmethod
-    def get_by_gsid(cls, gsid: "GupshupUserID") -> Optional["Puppet"]:
-        return cls._select_one_or_none(cls.c.gsid == gsid)
+    def _from_row(cls, row: asyncpg.Record) -> Puppet:
+        return cls(**row)
+
+    async def insert(self) -> None:
+        q = (
+            "INSERT INTO puppet (number, name, is_registered, custom_mxid, access_token, "
+            "next_batch, base_url) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7)"
+        )
+        await self.db.execute(q, *self._values)
+
+    async def update(self) -> None:
+        q = (
+            "UPDATE puppet SET number=$1, name=$2, is_registered=$3, custom_mxid=$4, "
+            "access_token=$5, next_batch=$6, base_url=$7  WHERE number=$1"
+        )
+        await self.db.execute(q, *self._values)
+
+    @classmethod
+    async def get_by_pk(cls, number: str) -> Puppet | None:
+        q = (
+            "SELECT  number, name, is_registered, custom_mxid, access_token, next_batch, base_url "
+            "FROM puppet WHERE number=$1"
+        )
+        row = await cls.db.fetchrow(q, number)
+        if not row:
+            return None
+        return cls._from_row(row)
+
+    @classmethod
+    async def get_by_number(cls, number: str) -> Puppet | None:
+        q = (
+            "SELECT  number, name, is_registered, custom_mxid, access_token, next_batch, base_url "
+            "FROM puppet WHERE number=$1"
+        )
+        row = await cls.db.fetchrow(q, number)
+        if not row:
+            return None
+        return cls._from_row(row)
+
+    @classmethod
+    async def get_by_custom_mxid(cls, mxid: UserID) -> Puppet | None:
+        q = (
+            "SELECT  number, name, is_registered, custom_mxid, access_token, next_batch, base_url "
+            "FROM puppet WHERE custom_mxid=$1"
+        )
+        row = await cls.db.fetchrow(q, mxid)
+        if not row:
+            return None
+        return cls._from_row(row)
+
+    @classmethod
+    async def all_with_custom_mxid(cls) -> list[Puppet]:
+        q = (
+            "SELECT  number, name, is_registered, custom_mxid, access_token, next_batch, base_url "
+            "FROM puppet WHERE custom_mxid IS NOT NULL"
+        )
+        rows = await cls.db.fetch(q)
+        return [cls._from_row(row) for row in rows]

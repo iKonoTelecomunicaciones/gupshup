@@ -1,22 +1,17 @@
 import json
-from typing import Dict, List
 
 from markdown import markdown
-from mautrix.bridge.commands.handler import (
-    SECTION_GENERAL,
-    CommandEvent,
-    HelpCacheKey,
-    HelpSection,
-    command_handler,
-    command_handlers,
-)
+from mautrix.bridge.commands import HelpSection, command_handler
 from mautrix.types import EventID, Format, MessageType, TextMessageEventContent
 
 from .. import portal as po
+from .typehint import CommandEvent
+
+SECTION_MISC = HelpSection("Miscellaneous", 40, "")
 
 
 @command_handler(
-    help_section=SECTION_GENERAL,
+    help_section=SECTION_MISC,
     help_args="<international phone number>",
     help_text="Open a private chat with the given phone number.",
 )
@@ -33,7 +28,7 @@ async def pm(evt: CommandEvent) -> EventID:
     except ValueError:
         return await evt.reply("Invalid phone number.")
 
-    portal = po.Portal.get_by_gsid(gsid=phone_number)
+    portal = po.Portal.get_by_chat_id(gsid=phone_number)
 
     if portal.mxid:
         return await evt.reply(
@@ -52,7 +47,7 @@ async def pm(evt: CommandEvent) -> EventID:
 
 
 @command_handler(
-    help_section=SECTION_GENERAL,
+    help_section=SECTION_MISC,
     help_args='{"room_id": "", "template_message": ""}',
     help_text="Send a Gupshup template",
 )
@@ -93,7 +88,7 @@ async def template(evt: CommandEvent) -> EventID:
 
 
 @command_handler(
-    help_section=SECTION_GENERAL,
+    help_section=SECTION_MISC,
     help_args='{"room_id": "", "interactive_message": dict}',
     help_text="Send a Gupshup interactive message",
 )
@@ -144,41 +139,3 @@ async def interactive_message(evt: CommandEvent) -> EventID:
         event_id=msg_event_id,
         additional_data=interactive_message,
     )
-
-
-@command_handler()
-async def unknown_command(evt: CommandEvent) -> EventID:
-    return await evt.reply("Unknown command. Try `$cmdprefix+sp help` for help.")
-
-
-help_cache: Dict[HelpCacheKey, str] = {}
-
-
-async def _get_help_text(evt: CommandEvent) -> str:
-    cache_key = await evt.get_help_key()
-    if cache_key not in help_cache:
-        help_sections: Dict[HelpSection, List[str]] = {}
-        for handler in command_handlers.values():
-            if handler.has_help and handler.has_permission(cache_key):
-                help_sections.setdefault(handler.help_section, [])
-                help_sections[handler.help_section].append(handler.help + "  ")
-        help_sorted = sorted(help_sections.items(), key=lambda item: item[0].order)
-        helps = ["#### {}\n{}\n".format(key.name, "\n".join(value)) for key, value in help_sorted]
-        help_cache[cache_key] = "\n".join(helps)
-    return help_cache[cache_key]
-
-
-def _get_management_status(evt: CommandEvent) -> str:
-    if evt.is_management:
-        return "This is a management room: prefixing commands with `$cmdprefix` is not required."
-    elif evt.is_portal:
-        return (
-            "**This is a portal room**: you must always prefix commands with `$cmdprefix`.\n"
-            "Management commands will not be bridged."
-        )
-    return "**This is not a management room**: you must prefix commands with `$cmdprefix`."
-
-
-@command_handler(name="help", help_section=SECTION_GENERAL, help_text="Show this help message.")
-async def help_cmd(evt: CommandEvent) -> EventID:
-    return await evt.reply(_get_management_status(evt) + "\n" + await _get_help_text(evt))

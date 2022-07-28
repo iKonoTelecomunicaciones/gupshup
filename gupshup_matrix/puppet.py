@@ -1,151 +1,199 @@
-from typing import TYPE_CHECKING, Dict, Optional
+from __future__ import annotations
 
-from mautrix.bridge import CustomPuppetMixin
-from mautrix.types import UserID
+from typing import TYPE_CHECKING, AsyncGenerator, AsyncIterable, Awaitable, Dict, Optional, cast
+
+from mautrix.appservice import IntentAPI
+from mautrix.bridge import BasePuppet, async_getter_lock
+from mautrix.types import SyncToken, UserID
 from mautrix.util.simple_template import SimpleTemplate
+from yarl import URL
 
+from . import portal as p
 from .config import Config
 from .db import Puppet as DBPuppet
-from .gupshup import GupshupUserID
-
-if TYPE_CHECKING:
-    from .context import Context
+from .gupshup.data import GupshupMessageSender
 
 try:
     import phonenumbers
 except ImportError:
     phonenumbers = None
 
-import logging
+if TYPE_CHECKING:
+    from .__main__ import GupshupBridge
 
-config: Config
 
-
-class Puppet(CustomPuppetMixin):
-    log: logging.Logger = logging.getLogger("mau.puppet")
+class Puppet(DBPuppet, BasePuppet):
+    by_number: Dict[str, "Puppet"] = {}
+    by_custom_mxid: dict[UserID, Puppet] = {}
     hs_domain: str
-    gsid_template: SimpleTemplate[int] = SimpleTemplate("{number}", "number", type=int)
     mxid_template: SimpleTemplate[str]
-    displayname_template: SimpleTemplate[str]
 
-    by_gsid: Dict[GupshupUserID, "Puppet"] = {}
+    config: Config
 
-    gsid: GupshupUserID
-    _formatted_number: Optional[str]
-
-    _db_instance: Optional[DBPuppet]
+    default_mxid_intent: IntentAPI
+    default_mxid: UserID
 
     def __init__(
         self,
-        gsid: GupshupUserID,
+        number: str | None,
+        name: str | None = None,
         is_registered: bool = False,
-        db_instance: Optional[DBPuppet] = None,
+        custom_mxid: UserID | None = None,
+        access_token: str | None = None,
+        next_batch: SyncToken | None = None,
+        base_url: URL | None = None,
     ) -> None:
-        super().__init__()
-        self.gsid = gsid
-        self.is_registered = is_registered
-        self._formatted_number = None
-        self._db_instance = db_instance
-        self.intent = self.az.intent.user(self.mxid)
-        self.log = self.log.getChild(self.gsid)
-        self.by_gsid[self.gsid] = self
+        super().__init__(
+            number=number,
+            name=name,
+            is_registered=is_registered,
+            custom_mxid=custom_mxid,
+            access_token=access_token,
+            next_batch=next_batch,
+            base_url=base_url,
+        )
 
-    @property
-    def phone_number(self) -> int:
-        return self.gsid_template.parse(self.gsid)
+        self.log = self.log.getChild(self.number)
 
-    @property
-    def formatted_phone_number(self) -> str:
-        if not self._formatted_number and self.phone_number:
-            parsed = phonenumbers.parse(f"+{self.phone_number}")
-            fmt = phonenumbers.PhoneNumberFormat.INTERNATIONAL
-            self._formatted_number = phonenumbers.format_number(parsed, fmt)
-        return self._formatted_number
+        self.default_mxid = self.get_mxid_from_number(self.number)
+        self.custom_mxid = self.default_mxid
+        self.default_mxid_intent = self.az.intent.user(self.default_mxid)
+
+        self.intent = self._fresh_intent()
+
+    @classmethod
+    def init_cls(cls, bridge: "GupshupBridge") -> AsyncIterable[Awaitable[None]]:
+        cls.config = bridge.config
+        cls.loop = bridge.loop
+        cls.mx = bridge.matrix
+        cls.az = bridge.az
+        cls.hs_domain = cls.config["homeserver.domain"]
+        cls.mxid_template = SimpleTemplate(
+            cls.config["bridge.username_template"],
+            "userid",
+            prefix="@",
+            suffix=f":{cls.hs_domain}",
+        )
+        cls.sync_with_custom_puppets = cls.config["bridge.sync_with_custom_puppets"]
+
+        cls.login_device_name = "Gupshup Bridge"
+        return (puppet.try_start() async for puppet in cls.all_with_custom_mxid())
+
+    def intent_for(self, portal: p.Portal) -> IntentAPI:
+        if portal.number == self.number:
+            return self.default_mxid_intent
+        return self.intent
+
+    def _add_to_cache(self) -> None:
+        if self.number:
+            self.by_number[self.number] = self
+        if self.custom_mxid:
+            self.by_custom_mxid[self.custom_mxid] = self
 
     @property
     def mxid(self) -> UserID:
-        return UserID(self.mxid_template.format_full(str(self.phone_number)))
+        return UserID(self.mxid_template.format_full(self.number))
 
-    @property
-    def displayname(self) -> str:
-        return self.displayname_template.format_full(str(self.formatted_phone_number))
+    async def save(self) -> None:
+        await self.update()
 
-    @property
-    def db_instance(self) -> DBPuppet:
-        if not self._db_instance:
-            self._db_instance = DBPuppet(gsid=self.gsid, matrix_registered=self.is_registered)
-        return self._db_instance
+    async def update_info(self, info: GupshupMessageSender) -> None:
+        update = False
+        update = await self._update_name(info) or update
+        if update:
+            await self.update()
 
     @classmethod
-    def from_db(cls, db_puppet: DBPuppet) -> "Puppet":
-        return cls(
-            gsid=db_puppet.gsid, is_registered=db_puppet.matrix_registered, db_instance=db_puppet
+    def _get_displayname(cls, info: GupshupMessageSender) -> str:
+        return cls.config["bridge.displayname_template"].format(
+            displayname=info.name, id=info.phone
         )
 
-    def save(self) -> None:
-        self.db_instance.edit(matrix_registered=self.is_registered)
+    async def _update_name(self, info: GupshupMessageSender) -> bool:
+        name = self._get_displayname(info)
+        if name != self.name:
+            self.name = name
+            try:
+                await self.default_mxid_intent.set_displayname(self.name)
+                self.name_set = True
+            except Exception:
+                self.log.exception("Failed to update displayname")
+                self.name_set = False
+            return True
+        return False
+
+    @classmethod
+    def get_mxid_from_number(cls, number: str) -> UserID:
+        return UserID(cls.mxid_template.format_full(number))
 
     async def get_displayname(self) -> str:
-        return await self.intent.get_displayname(str(self.mxid))
-
-    async def update_displayname(self, displayname: Optional[str] = None) -> None:
-        displayname = (
-            self.displayname_template.format_full(str(displayname))
-            if displayname
-            else str(self.gsid)
-        )
-        await self.intent.set_displayname(displayname)
+        return await self.intent.get_displayname(self.mxid)
 
     @classmethod
-    def get_by_gsid(cls, gsid: GupshupUserID, create: bool = True) -> Optional["Puppet"]:
+    @async_getter_lock
+    async def get_by_number(cls, number: str, create: bool = True) -> Optional["Puppet"]:
         try:
-            return cls.by_gsid[gsid]
+            return cls.by_number[number]
         except KeyError:
             pass
 
-        db_puppet = DBPuppet.get_by_gsid(gsid)
-        if db_puppet:
-            return cls.from_db(db_puppet)
+        puppet = cast(cls, await super().get_by_number(number))
+        if puppet is not None:
+            puppet._add_to_cache()
+            return puppet
 
         if create:
-            puppet = cls(gsid)
-            puppet.db_instance.insert()
+            puppet = cls(number)
+            await puppet.insert()
+            puppet._add_to_cache()
             return puppet
 
         return None
 
     @classmethod
-    def get_by_mxid(cls, mxid: UserID, create: bool = True) -> Optional["Puppet"]:
-        gsid = cls.get_gsid_from_mxid(mxid)
-        if gsid:
-            return cls.get_by_gsid(gsid, create)
+    def get_number_from_mxid(cls, mxid: UserID) -> str | None:
+        number = cls.mxid_template.parse(mxid)
+        if not number:
+            return None
+        return number
+
+    @classmethod
+    async def get_by_mxid(cls, mxid: UserID, create: bool = True) -> Optional["Puppet"]:
+        number = cls.get_number_from_mxid(mxid)
+        if number:
+            return await cls.get_by_number(number, create)
+        return None
+
+    @classmethod
+    @async_getter_lock
+    async def get_by_custom_mxid(cls, mxid: UserID) -> "Puppet" | None:
+        try:
+            return cls.by_custom_mxid[mxid]
+        except KeyError:
+            pass
+
+        puppet = cast(cls, await super().get_by_custom_mxid(mxid))
+        if puppet:
+            puppet._add_to_cache()
+            return puppet
 
         return None
 
     @classmethod
-    def get_gsid_from_mxid(cls, mxid: UserID) -> Optional[GupshupUserID]:
-        parsed = cls.mxid_template.parse(mxid)
-        if parsed:
-            return GupshupUserID(cls.gsid_template.format_full(parsed))
-        return None
+    def get_id_from_mxid(cls, mxid: UserID) -> int | None:
+        return cls.mxid_template.parse(mxid)
 
     @classmethod
-    def get_mxid_from_gsid(cls, gsid: GupshupUserID) -> UserID:
-        return UserID(cls.mxid_template.format_full(str(cls.gsid_template.parse(gsid))))
+    def get_mxid_from_number(cls, number: str) -> UserID:
+        return UserID(cls.mxid_template.format_full(number))
 
-
-def init(context: "Context") -> None:
-    global config
-    Puppet.az, config, Puppet.loop = context.core
-    Puppet.mx = context.mx
-    Puppet.hs_domain = config["homeserver"]["domain"]
-    Puppet.mxid_template = SimpleTemplate(
-        config["bridge.username_template"],
-        "userid",
-        prefix="@",
-        suffix=f":{Puppet.hs_domain}",
-        type=str,
-    )
-    Puppet.displayname_template = SimpleTemplate(
-        config["bridge.displayname_template"], "displayname", type=str
-    )
+    @classmethod
+    async def all_with_custom_mxid(cls) -> AsyncGenerator["Puppet", None]:
+        puppets = await super().all_with_custom_mxid()
+        puppet: cls
+        for index, puppet in enumerate(puppets):
+            try:
+                yield cls.by_number[puppet.number]
+            except KeyError:
+                puppet._add_to_cache()
+                yield puppet
