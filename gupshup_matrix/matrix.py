@@ -62,11 +62,11 @@ class MatrixHandler(BaseMatrixHandler):
         if not portal:
             return
 
-        user = await u.User.get_by_mxid(user_id, create=False)
+        user = await u.User.get_by_mxid(user_id)
         if not user:
             return
 
-        await portal.handle_matrix_join(user)
+        # await portal.handle_matrix_join(user)
 
     async def allow_message(self, user: u.User) -> bool:
         return user.relay_whitelisted

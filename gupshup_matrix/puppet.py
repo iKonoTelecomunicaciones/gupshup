@@ -11,6 +11,7 @@ from yarl import URL
 from . import portal as p
 from .config import Config
 from .db import Puppet as DBPuppet
+from .gupshup.data import GupshupMessageSender
 
 try:
     import phonenumbers
@@ -95,6 +96,32 @@ class Puppet(DBPuppet, BasePuppet):
 
     async def save(self) -> None:
         await self.update()
+
+    async def update_info(self, info: GupshupMessageSender) -> None:
+        update = False
+        update = await self._update_name(info) or update
+        if update:
+            await self.update()
+
+    @classmethod
+    def _get_displayname(cls, info: GupshupMessageSender) -> str:
+        return cls.config["bridge.displayname_template"].format(
+            displayname=info.name, id=info.phone
+        )
+
+    async def _update_name(self, info: GupshupMessageSender) -> bool:
+        name = self._get_displayname(info)
+        if name != self.name:
+            self.name = name
+            try:
+                await self.default_mxid_intent.set_displayname(self.name)
+                self.name_set = True
+            except Exception:
+                self.log.exception("Failed to update displayname")
+                self.name_set = False
+            return True
+        return False
+
 
     @classmethod
     def get_mxid_from_number(cls, number: str) -> UserID:

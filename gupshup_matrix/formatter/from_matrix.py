@@ -4,8 +4,9 @@ from mautrix.util.formatter import EntityType, MarkdownString
 from mautrix.util.formatter import MatrixParser as BaseMatrixParser
 
 
-def matrix_to_whatsapp(html: str) -> str:
-    return MatrixParser.parse(html).text
+async def matrix_to_whatsapp(html: str) -> str:
+    parsed = await MatrixParser().parse(html)
+    return parsed.text
 
 
 class WhatsAppFormatString(MarkdownString):
@@ -38,6 +39,5 @@ class WhatsAppFormatString(MarkdownString):
 class MatrixParser(BaseMatrixParser[WhatsAppFormatString]):
     fs = WhatsAppFormatString
 
-    @classmethod
-    def parse(cls, data: str) -> WhatsAppFormatString:
-        return cast(WhatsAppFormatString, super().parse(data))
+    async def parse(self, data: str) -> WhatsAppFormatString:
+        return cast(WhatsAppFormatString, await super().parse(data))

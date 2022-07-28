@@ -55,7 +55,10 @@ bridge:
     # Displayname template for remote users.
     # {displayname} is replaced with the phone number of the user (human-readable international format).
     displayname_template: "{displayname} (WA)"
-
+    # How the rooms will be named?
+    # {phone}       - phone number (international format)
+    # {username}    - nickname set by the WhatsApp user
+    room_name_template: "{username} ({phone})"
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!gs"
 
@@ -107,12 +110,6 @@ bridge:
 gupshup:
     # Gupsghup base URL
     base_url: https://api.gupshup.io/sm/api/v1/msg
-    # Your Gupsghup API KEY (get from Gupsghup settings)
-    api_key: nvjbf9fcvjcjowl5ox6cq3jgwr59ivr3
-    # Gupsghup app name
-    app_name: DemoApp
-    # Gupsghup sender
-    sender: "5730123456789"
     # Path prefix for webhook endpoints. Subpaths are /status and /receive.
     # Note that the webhook must be put behind a reverse proxy with https.
     webhook_path: /gupshup

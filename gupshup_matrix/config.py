@@ -28,6 +28,7 @@ class Config(BaseBridgeConfig):
 
         copy("bridge.username_template")
         copy("bridge.displayname_template")
+        copy("bridge.room_name_template")
         copy("bridge.private_chat_name_template")
         copy("bridge.command_prefix")
         copy("bridge.google_maps_url")
@@ -42,9 +43,6 @@ class Config(BaseBridgeConfig):
         copy_dict("bridge.permissions")
 
         copy("gupshup.base_url")
-        copy("gupshup.app_name")
-        copy("gupshup.api_key")
-        copy("gupshup.sender")
         copy("gupshup.webhook_path")
         copy("gupshup.error_codes")
 

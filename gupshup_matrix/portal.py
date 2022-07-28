@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from html import escape
 from string import Template
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
 
@@ -22,20 +21,16 @@ from mautrix.types import (
     UserID,
 )
 
+from gupshup_matrix.formatter.from_matrix import matrix_to_whatsapp
+from gupshup_matrix.gupshup.data import GupshupPayload
+
 from . import puppet as p
 from . import user as u
 from .db import GupshupApplication as DBGupshupApplication
 from .db import Message as DBMessage
 from .db import Portal as DBPortal
-from .formatter import matrix_to_whatsapp, whatsapp_reply_to_matrix, whatsapp_to_matrix
-from .gupshup import (
-    GupshupApplication,
-    GupshupClient,
-    GupshupMessageEvent,
-    GupshupMessageID,
-    GupshupMessageStatus,
-    GupshupStatusEvent,
-)
+from .formatter import whatsapp_reply_to_matrix, whatsapp_to_matrix
+from .gupshup import GupshupClient, GupshupMessageEvent, GupshupMessageID, GupshupMessageStatus
 
 if TYPE_CHECKING:
     from .__main__ import GupshupBridge
@@ -67,6 +62,10 @@ class Portal(DBPortal, BasePortal):
 
     _main_intent: Optional[IntentAPI] | None
     _create_room_lock: asyncio.Lock
+    _send_lock: asyncio.Lock
+
+    gs_source: str
+    gs_app: str
 
     def __init__(
         self,
@@ -78,6 +77,7 @@ class Portal(DBPortal, BasePortal):
         super().__init__(chat_id, number, mxid, relay_user_id)
         BasePortal.__init__(self)
         self._create_room_lock = asyncio.Lock()
+        self._send_lock = asyncio.Lock()
         self.log = self.log.getChild(self.chat_id or self.number)
         self._main_intent = None
         self._relay_user = None
@@ -87,6 +87,29 @@ class Portal(DBPortal, BasePortal):
         if not self._main_intent:
             raise ValueError("Portal must be postinit()ed before main_intent can be used")
         return self._main_intent
+
+    @property
+    async def main_data_gs(self) -> Dict:
+        gs_app_name, _ = self.chat_id.split("-")
+        try:
+            gs_app = await DBGupshupApplication.get_by_name(name=gs_app_name)
+        except Exception as e:
+            self.log.exception(e)
+            return
+
+        self.gs_source = gs_app.phone_number
+        self.gs_app = gs_app.name
+
+        return {
+            "channel": "whatsapp",
+            "source": gs_app.phone_number,
+            "destination": self.number,
+            "src.name": gs_app_name,
+            "headers": {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "apikey": gs_app.api_key,
+            },
+        }
 
     @property
     def is_direct(self) -> bool:
@@ -100,6 +123,7 @@ class Portal(DBPortal, BasePortal):
         cls.loop = bridge.loop
         BasePortal.bridge = bridge
         cls.private_chat_portal_meta = cls.config["bridge.private_chat_portal_meta"]
+        cls.gsc = bridge.gupshup_client
 
     def send_text_message(self, message: GupshupMessageEvent) -> Optional["Portal"]:
         html, text = whatsapp_to_matrix(message)
@@ -108,8 +132,6 @@ class Portal(DBPortal, BasePortal):
             content.format = Format.HTML
             content.formatted_body = html
         return self.main_intent.send_message(self.mxid, content)
-
-
 
     async def create_matrix_room(self, message: GupshupMessageEvent = None) -> RoomID:
         if self.mxid:
@@ -143,12 +165,21 @@ class Portal(DBPortal, BasePortal):
                 "content": power_levels.serialize(),
             },
         ]
-        invites = []
+
+        try:
+            gs_app = await DBGupshupApplication.get_by_name(name=message.app)
+        except Exception as e:
+            self.log.exception(e)
+            return
+
+        invites = [gs_app.admin_user]
         creation_content = {}
         if not self.config["bridge.federate_rooms"]:
             creation_content["m.federate"] = False
         self.mxid = await self.main_intent.create_room(
-            name=f"{message.payload.sender.name} ({self.number})",
+            name=self.config["bridge.room_name_template"].format(
+                username=message.payload.sender.name, phone=self.number
+            ),
             is_direct=self.is_direct,
             initial_state=initial_state,
             invitees=invites,
@@ -164,6 +195,7 @@ class Portal(DBPortal, BasePortal):
 
         self.log.debug(self.number)
         puppet: p.Puppet = await p.Puppet.get_by_number(self.number)
+        puppet.name = message.payload.sender.name
         await self.main_intent.invite_user(
             self.mxid, puppet.mxid, extra_content=self._get_invite_content(puppet)
         )
@@ -175,6 +207,7 @@ class Portal(DBPortal, BasePortal):
                     "Failed to join custom puppet into newly created portal", exc_info=True
                 )
         await self.update()
+        await puppet.update_info(message.payload.sender)
         self.log.debug(f"Matrix room created: {self.mxid}")
         self.by_mxid[self.mxid] = self
         return self.mxid
@@ -358,19 +391,17 @@ class Portal(DBPortal, BasePortal):
         )
         await msg.insert()
 
-    async def handle_gupshup_status(self, status: GupshupStatusEvent) -> None:
+    async def handle_gupshup_status(self, status: GupshupPayload) -> None:
         if not self.mxid:
             return
         async with self._send_lock:
-            msg = DBMessage.get_by_gsid(status.id, self.number)
+            msg = await DBMessage.get_by_gsid(status.id)
             if status.type == GupshupMessageStatus.DELIVERED:
-                msg = DBMessage.get_by_gsid(status.number, self.number)
                 if msg:
                     await self.az.intent.mark_read(self.mxid, msg.mxid)
                 else:
                     self.log.debug(f"Ignoring the null message")
             elif status.type == GupshupMessageStatus.READ:
-                msg = DBMessage.get_by_gsid(status.number, self.number)
                 if msg:
                     await self.main_intent.mark_read(self.mxid, msg.mxid)
                 else:
@@ -403,23 +434,20 @@ class Portal(DBPortal, BasePortal):
             await DBMessage.get_by_mxid(message.get_reply_to(), self.mxid)
 
         if message.msgtype in (MessageType.TEXT, MessageType.NOTICE):
-            text = matrix_to_whatsapp(html)
 
             if message.format == Format.HTML:
-                # only font styles from element
-                html = message.formatted_body
+                text = await matrix_to_whatsapp(message.formatted_body)
             else:
-                html = escape(message.body)
-                html = html.replace("\n", "<br />")
+                text = text = message.body
 
             if additional_data:
                 resp = await self.gsc.send_message(
-                    self.number,
+                    data=await self.main_data_gs,
                     additional_data=additional_data,
                 )
             else:
                 resp = await self.gsc.send_message(
-                    self.number,
+                    data=await self.main_data_gs,
                     body=text,
                     is_gupshup_template=is_gupshup_template,
                 )
@@ -432,7 +460,7 @@ class Portal(DBPortal, BasePortal):
         ):
             url = f"{self.homeserver_address}/_matrix/media/r0/download/{message.url[6:]}"
             resp = await self.gsc.send_message(
-                self.number, media=url, body=message.body, msgtype=message.msgtype
+                media=url, body=message.body, msgtype=message.msgtype
             )
         elif message.msgtype == MessageType.LOCATION:
             resp = await self.gsc.send_location(
@@ -444,13 +472,12 @@ class Portal(DBPortal, BasePortal):
             return
         self.log.debug(f"Gupshup send response: {resp}")
 
-
-        DBMessage(
+        await DBMessage(
             mxid=event_id,
             mx_room=self.mxid,
-            sender=self.relay_user_id,
+            sender=self.gs_source,
             gsid=GupshupMessageID(resp.get("messageId")),
-            gs_app=GupshupApplication(resp.get("gs_app")),
+            gs_app=self.gs_app,
         ).insert()
 
     async def postinit(self) -> None:
