@@ -394,8 +394,9 @@ class Portal(DBPortal, BasePortal):
     async def handle_gupshup_status(self, status: GupshupPayload) -> None:
         if not self.mxid:
             return
+
         async with self._send_lock:
-            msg = await DBMessage.get_by_gsid(status.id)
+            msg = await DBMessage.get_by_gsid(status.gsid)
             if status.type == GupshupMessageStatus.DELIVERED:
                 if msg:
                     await self.az.intent.mark_read(self.mxid, msg.mxid)
