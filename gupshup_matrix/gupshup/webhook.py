@@ -6,6 +6,7 @@ from aiohttp import web
 
 from .. import portal as po
 from ..config import Config
+from ..db.gupshup_application import GupshupApplication as DBGupshupApplication
 from .data import GupshupApplication, GupshupEventType, GupshupMessageEvent, GupshupStatusEvent
 
 
@@ -13,11 +14,10 @@ class GupshupHandler:
     log: logging.Logger = logging.getLogger("gupshup.in")
     app: web.Application
 
-    def __init__(self, config: Config, loop: asyncio.AbstractEventLoop = None) -> None:
+    def __init__(self, loop: asyncio.AbstractEventLoop = None) -> None:
         self.loop = loop or asyncio.get_event_loop()
         self.app = web.Application(loop=self.loop)
         self.app.router.add_route("POST", "/receive", self.receive)
-        self.app_name = config["gupshup.app_name"]
 
     async def _validate_request(
         self, data: Dict, type_class: Any
@@ -35,10 +35,11 @@ class GupshupHandler:
 
     async def receive(self, request: web.Request) -> None:
         data = dict(**await request.json())
-        if data.get("app") != self.app_name:
+        if not data.get("app") in await DBGupshupApplication.get_all_gs_apps():
             self.log.debug(f"App name invalid.")
             return web.Response(status=406)
-        elif data.get("type") == GupshupEventType.MESSAGE:
+
+        if data.get("type") == GupshupEventType.MESSAGE:
             return await self.message_event(data)
         elif data.get("type") == GupshupEventType.MESSAGE_EVENT:
             return await self.status_event(data)

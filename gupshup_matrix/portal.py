@@ -109,20 +109,9 @@ class Portal(DBPortal, BasePortal):
             content.formatted_body = html
         return self.main_intent.send_message(self.mxid, content)
 
-    async def register_gs_app(self, gs_app: GupshupApplication):
 
-        if await DBGupshupApplication.get_by_name(gs_app):
-            return
-
-        self.log.debug(f"Registering {gs_app} GupshupApplication")
-
-        try:
-            await DBGupshupApplication.insert(name=gs_app, app_id=None, phone_number=None)
-        except Exception as e:
-            self.log.exception(f"Error registering {gs_app} {e}")
 
     async def create_matrix_room(self, message: GupshupMessageEvent = None) -> RoomID:
-        await self.register_gs_app(gs_app=message.app)
         if self.mxid:
             return self.mxid
         async with self._create_room_lock:
@@ -260,6 +249,7 @@ class Portal(DBPortal, BasePortal):
         pass
 
     async def handle_gupshup_message(self, message: GupshupMessageEvent) -> None:
+
         if not await self.create_matrix_room(message):
             return
 
@@ -340,7 +330,7 @@ class Portal(DBPortal, BasePortal):
 
             body = message.payload.body.text
 
-            evt = DBMessage.get_by_gsid(number=mgs_id, gs_receiver=self.number)
+            evt = DBMessage.get_by_gsid(number=mgs_id)
             if evt:
                 content = await whatsapp_reply_to_matrix(body, evt, self.main_intent, self.log)
                 content.external_url = content.external_url
@@ -363,7 +353,6 @@ class Portal(DBPortal, BasePortal):
             mxid=mxid,
             mx_room=self.mxid,
             sender=sender,
-            receiver=self.relay_user_id,
             gsid=message.payload.id,
             gs_app=message.app,
         )
@@ -455,13 +444,11 @@ class Portal(DBPortal, BasePortal):
             return
         self.log.debug(f"Gupshup send response: {resp}")
 
-        receiver: UserID = p.Puppet.get_mxid_from_number(self.number)
 
         DBMessage(
             mxid=event_id,
             mx_room=self.mxid,
             sender=self.relay_user_id,
-            receiver=receiver,
             gsid=GupshupMessageID(resp.get("messageId")),
             gs_app=GupshupApplication(resp.get("gs_app")),
         ).insert()

@@ -30,17 +30,18 @@ async def upgrade_v1(conn: Connection) -> None:
         mxid        TEXT NOT NULL,
         mx_room     TEXT NOT NULL,
         sender      TEXT NOT NULL,
-        receiver    TEXT NOT NULL,
         gsid        TEXT NOT NULL,
         gs_app      TEXT NOT NULL,
-        PRIMARY KEY (mxid, receiver),
+        PRIMARY KEY (mxid),
         UNIQUE (mxid, mx_room)
     )"""
     )
     await conn.execute(
         """CREATE TABLE gupshup_application (
         name            TEXT PRIMARY KEY,
+        admin_user      TEXT,
         app_id          TEXT,
+        api_key         TEXT,
         phone_number    TEXT
     )"""
     )

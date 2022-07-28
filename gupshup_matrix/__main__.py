@@ -37,7 +37,7 @@ class GupshupBridge(Bridge):
         init_db(self.db)
 
     def prepare_bridge(self) -> None:
-        self.gupshup = GupshupHandler(config=self.config, loop=self.loop)
+        self.gupshup = GupshupHandler(loop=self.loop)
         super().prepare_bridge()
         self.gupshup_client = GupshupClient(config=self.config, loop=self.loop)
         self.az.app.add_subapp(self.config["gupshup.webhook_path"], self.gupshup.app)

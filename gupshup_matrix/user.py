@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional
 
 from mautrix.appservice import AppService
 from mautrix.bridge import BaseUser
@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 class User(BaseUser):
     by_mxid: Dict[UserID, "User"] = {}
     by_number: Dict[str, "User"] = {}
+
     config: Config
     az: AppService
     loop: asyncio.AbstractEventLoop
