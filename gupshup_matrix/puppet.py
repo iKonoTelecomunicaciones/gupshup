@@ -122,7 +122,6 @@ class Puppet(DBPuppet, BasePuppet):
             return True
         return False
 
-
     @classmethod
     def get_mxid_from_number(cls, number: str) -> UserID:
         return UserID(cls.mxid_template.format_full(number))
