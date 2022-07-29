@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from string import Template
+from turtle import update
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
 
 from mautrix.appservice import AppService, IntentAPI
@@ -260,12 +261,10 @@ class Portal(DBPortal, BasePortal):
         }
 
     async def delete(self) -> None:
-        # if self.mxid:
-        #     await DBMessage.delete_all_by_room(self.mxid)
-        # self.by_fbid.pop(self.fbid_full, None)
-        # self.by_mxid.pop(self.mxid, None)
-        # await super().delete()
-        pass
+        await DBMessage.delete_all(self.mxid)
+        self.by_mxid.pop(self.mxid, None)
+        self.mxid = None
+        await self.update()
 
     async def get_dm_puppet(self) -> p.Puppet | None:
         if not self.is_direct:

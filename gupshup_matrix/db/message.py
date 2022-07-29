@@ -39,6 +39,10 @@ class Message:
         return cls(**row)
 
     @classmethod
+    async def delete_all(cls, room_id: RoomID) -> None:
+        await cls.db.execute("DELETE FROM message WHERE mx_room=$1", room_id)
+
+    @classmethod
     async def get_all_by_gsid(cls, gsid: str) -> Iterable["Message"]:
         q = "SELECT mxid, mx_room, sender, gsid, gs_app FROM message WHERE gsid=$1"
         rows = await cls.db.fetch(q, gsid)
