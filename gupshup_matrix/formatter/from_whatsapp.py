@@ -119,8 +119,7 @@ async def _add_reply_header(
         if isinstance(event.content, TextMessageEventContent):
             event.content.trim_reply_fallback()
         puppet = await pu.get_by_mxid(event.sender, create=False)
-        content.set_reply(event, displayname=puppet.displayname if puppet else event.sender)
-        log.debug("Reply message created")
+        content.set_reply(event, displayname=puppet.name if puppet else event.sender)
     except MatrixRequestError:
         log.exception("Failed to get event to add reply fallback")
         pass
