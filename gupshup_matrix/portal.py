@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
 
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal
-from mautrix.errors import MatrixError
+from mautrix.errors import MatrixError, MUnknown
 from mautrix.types import (
     EventID,
     EventType,
@@ -291,7 +291,14 @@ class Portal(DBPortal, BasePortal):
         if message.payload.body.url:
             resp = await self.az.http_session.get(message.payload.body.url)
             data = await resp.read()
-            mxc = await self.main_intent.upload_media(data=data)
+            try:
+                mxc = await self.main_intent.upload_media(data=data)
+            except MUnknown as e:
+                self.log.error(f"{message} :: error {e}")
+                return
+            except Exception as e:
+                self.log.error(f"Message not receive :: error {e}")
+                return
 
             if message.payload.type in ("image", "video"):
                 msgtype = (
