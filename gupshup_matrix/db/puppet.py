@@ -15,7 +15,7 @@ fake_db = Database.create("") if TYPE_CHECKING else None
 class Puppet:
     db: ClassVar[Database] = fake_db
 
-    number: str
+    phone: str
     name: str | None
 
     is_registered: bool
@@ -28,7 +28,7 @@ class Puppet:
     @property
     def _values(self):
         return (
-            self.number,
+            self.phone,
             self.name,
             self.is_registered,
             self.custom_mxid,
@@ -43,7 +43,7 @@ class Puppet:
 
     async def insert(self) -> None:
         q = (
-            "INSERT INTO puppet (number, name, is_registered, custom_mxid, access_token, "
+            "INSERT INTO puppet (phone, name, is_registered, custom_mxid, access_token, "
             "next_batch, base_url) "
             "VALUES ($1, $2, $3, $4, $5, $6, $7)"
         )
@@ -51,29 +51,29 @@ class Puppet:
 
     async def update(self) -> None:
         q = (
-            "UPDATE puppet SET number=$1, name=$2, is_registered=$3, custom_mxid=$4, "
-            "access_token=$5, next_batch=$6, base_url=$7  WHERE number=$1"
+            "UPDATE puppet SET phone=$1, name=$2, is_registered=$3, custom_mxid=$4, "
+            "access_token=$5, next_batch=$6, base_url=$7  WHERE phone=$1"
         )
         await self.db.execute(q, *self._values)
 
     @classmethod
-    async def get_by_pk(cls, number: str) -> Puppet | None:
+    async def get_by_pk(cls, phone: str) -> Puppet | None:
         q = (
-            "SELECT  number, name, is_registered, custom_mxid, access_token, next_batch, base_url "
-            "FROM puppet WHERE number=$1"
+            "SELECT  phone, name, is_registered, custom_mxid, access_token, next_batch, base_url "
+            "FROM puppet WHERE phone=$1"
         )
-        row = await cls.db.fetchrow(q, number)
+        row = await cls.db.fetchrow(q, phone)
         if not row:
             return None
         return cls._from_row(row)
 
     @classmethod
-    async def get_by_phone(cls, number: str) -> Puppet | None:
+    async def get_by_phone(cls, phone: str) -> Puppet | None:
         q = (
-            "SELECT  number, name, is_registered, custom_mxid, access_token, next_batch, base_url "
-            "FROM puppet WHERE number=$1"
+            "SELECT  phone, name, is_registered, custom_mxid, access_token, next_batch, base_url "
+            "FROM puppet WHERE phone=$1"
         )
-        row = await cls.db.fetchrow(q, number)
+        row = await cls.db.fetchrow(q, phone)
         if not row:
             return None
         return cls._from_row(row)
@@ -81,7 +81,7 @@ class Puppet:
     @classmethod
     async def get_by_custom_mxid(cls, mxid: UserID) -> Puppet | None:
         q = (
-            "SELECT  number, name, is_registered, custom_mxid, access_token, next_batch, base_url "
+            "SELECT  phone, name, is_registered, custom_mxid, access_token, next_batch, base_url "
             "FROM puppet WHERE custom_mxid=$1"
         )
         row = await cls.db.fetchrow(q, mxid)
@@ -92,7 +92,7 @@ class Puppet:
     @classmethod
     async def all_with_custom_mxid(cls) -> list[Puppet]:
         q = (
-            "SELECT  number, name, is_registered, custom_mxid, access_token, next_batch, base_url "
+            "SELECT  phone, name, is_registered, custom_mxid, access_token, next_batch, base_url "
             "FROM puppet WHERE custom_mxid IS NOT NULL"
         )
         rows = await cls.db.fetch(q)

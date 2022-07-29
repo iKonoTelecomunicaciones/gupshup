@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 class User(DBUser, BaseUser):
     by_mxid: Dict[UserID, "User"] = {}
     by_phone: Dict[str, "User"] = {}
+    by_gs_app: Dict[str, "User"] = {}
 
     config: Config
     az: AppService
@@ -37,9 +38,10 @@ class User(DBUser, BaseUser):
         self,
         mxid: UserID,
         phone: str | None = None,
+        gs_app: str | None = None,
         notice_room: RoomID | None = None,
     ) -> None:
-        super().__init__(mxid=mxid, phone=phone, notice_room=notice_room)
+        super().__init__(mxid=mxid, phone=phone, gs_app=gs_app, notice_room=notice_room)
         BaseUser.__init__(self)
         self._notice_room_lock = asyncio.Lock()
         self._sync_lock = asyncio.Lock()
@@ -55,7 +57,7 @@ class User(DBUser, BaseUser):
         cls.loop = bridge.loop
 
     async def get_portal_with(self, puppet: pu.Puppet, create: bool = True) -> po.Portal | None:
-        return await po.Portal.get_by_chat_id(puppet.number, create=create)
+        return await po.Portal.get_by_chat_id(puppet.phone, create=create)
 
     async def is_logged_in(self) -> bool:
         return bool(self.phone)
@@ -72,6 +74,8 @@ class User(DBUser, BaseUser):
         self.by_mxid[self.mxid] = self
         if self.phone:
             self.by_phone[self.phone] = self
+        if self.gs_app:
+            self.by_gs_app[self.gs_app] = self
 
     @classmethod
     async def get_by_mxid(cls, mxid: UserID, create: bool = True) -> Optional["User"]:
@@ -104,6 +108,21 @@ class User(DBUser, BaseUser):
             pass
 
         user = cast(cls, await super().get_by_phone(phone))
+        if user is not None:
+            user._add_to_cache()
+            return user
+
+        return None
+
+    @classmethod
+    @async_getter_lock
+    async def get_by_gs_app(cls, gs_app: UserID) -> Optional["User"]:
+        try:
+            return cls.by_gs_app[gs_app]
+        except KeyError:
+            pass
+
+        user = cast(cls, await super().get_by_gs_app(gs_app))
         if user is not None:
             user._add_to_cache()
             return user

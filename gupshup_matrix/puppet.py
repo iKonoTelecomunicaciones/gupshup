@@ -11,7 +11,7 @@ from yarl import URL
 from . import portal as p
 from .config import Config
 from .db import Puppet as DBPuppet
-from .gupshup.data import GupshupMessageSender
+from .gupshup.data import ChatInfo, GupshupMessageSender
 
 try:
     import phonenumbers
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 class Puppet(DBPuppet, BasePuppet):
-    by_number: Dict[str, "Puppet"] = {}
+    by_phone: Dict[str, "Puppet"] = {}
     by_custom_mxid: dict[UserID, Puppet] = {}
     hs_domain: str
     mxid_template: SimpleTemplate[str]
@@ -35,7 +35,7 @@ class Puppet(DBPuppet, BasePuppet):
 
     def __init__(
         self,
-        number: str | None,
+        phone: str | None,
         name: str | None = None,
         is_registered: bool = False,
         custom_mxid: UserID | None = None,
@@ -44,7 +44,7 @@ class Puppet(DBPuppet, BasePuppet):
         base_url: URL | None = None,
     ) -> None:
         super().__init__(
-            number=number,
+            phone=phone,
             name=name,
             is_registered=is_registered,
             custom_mxid=custom_mxid,
@@ -53,9 +53,9 @@ class Puppet(DBPuppet, BasePuppet):
             base_url=base_url,
         )
 
-        self.log = self.log.getChild(self.number)
+        self.log = self.log.getChild(self.phone)
 
-        self.default_mxid = self.get_mxid_from_number(self.number)
+        self.default_mxid = self.get_mxid_from_phone(self.phone)
         self.custom_mxid = self.default_mxid
         self.default_mxid_intent = self.az.intent.user(self.default_mxid)
 
@@ -80,36 +80,36 @@ class Puppet(DBPuppet, BasePuppet):
         return (puppet.try_start() async for puppet in cls.all_with_custom_mxid())
 
     def intent_for(self, portal: p.Portal) -> IntentAPI:
-        if portal.number == self.number:
+        if portal.phone == self.phone:
             return self.default_mxid_intent
         return self.intent
 
     def _add_to_cache(self) -> None:
-        if self.number:
-            self.by_number[self.number] = self
+        if self.phone:
+            self.by_phone[self.phone] = self
         if self.custom_mxid:
             self.by_custom_mxid[self.custom_mxid] = self
 
     @property
     def mxid(self) -> UserID:
-        return UserID(self.mxid_template.format_full(self.number))
+        return UserID(self.mxid_template.format_full(self.phone))
 
     async def save(self) -> None:
         await self.update()
 
-    async def update_info(self, info: GupshupMessageSender) -> None:
+    async def update_info(self, info: ChatInfo) -> None:
         update = False
         update = await self._update_name(info) or update
         if update:
             await self.update()
 
     @classmethod
-    def _get_displayname(cls, info: GupshupMessageSender) -> str:
+    def _get_displayname(cls, info: ChatInfo) -> str:
         return cls.config["bridge.displayname_template"].format(
-            displayname=info.name, id=info.phone
+            displayname=info.sender.name, id=info.sender.name
         )
 
-    async def _update_name(self, info: GupshupMessageSender) -> bool:
+    async def _update_name(self, info: ChatInfo) -> bool:
         name = self._get_displayname(info)
         if name != self.name:
             self.name = name
@@ -123,27 +123,27 @@ class Puppet(DBPuppet, BasePuppet):
         return False
 
     @classmethod
-    def get_mxid_from_number(cls, number: str) -> UserID:
-        return UserID(cls.mxid_template.format_full(number))
+    def get_mxid_from_phone(cls, phone: str) -> UserID:
+        return UserID(cls.mxid_template.format_full(phone))
 
     async def get_displayname(self) -> str:
         return await self.intent.get_displayname(self.mxid)
 
     @classmethod
     @async_getter_lock
-    async def get_by_phone(cls, number: str, create: bool = True) -> Optional["Puppet"]:
+    async def get_by_phone(cls, phone: str, create: bool = True) -> Optional["Puppet"]:
         try:
-            return cls.by_number[number]
+            return cls.by_phone[phone]
         except KeyError:
             pass
 
-        puppet = cast(cls, await super().get_by_phone(number))
+        puppet = cast(cls, await super().get_by_phone(phone))
         if puppet is not None:
             puppet._add_to_cache()
             return puppet
 
         if create:
-            puppet = cls(number)
+            puppet = cls(phone)
             await puppet.insert()
             puppet._add_to_cache()
             return puppet
@@ -151,17 +151,17 @@ class Puppet(DBPuppet, BasePuppet):
         return None
 
     @classmethod
-    def get_number_from_mxid(cls, mxid: UserID) -> str | None:
-        number = cls.mxid_template.parse(mxid)
-        if not number:
+    def get_phone_from_mxid(cls, mxid: UserID) -> str | None:
+        phone = cls.mxid_template.parse(mxid)
+        if not phone:
             return None
-        return number
+        return phone
 
     @classmethod
     async def get_by_mxid(cls, mxid: UserID, create: bool = True) -> Optional["Puppet"]:
-        number = cls.get_number_from_mxid(mxid)
-        if number:
-            return await cls.get_by_phone(number, create)
+        phone = cls.get_phone_from_mxid(mxid)
+        if phone:
+            return await cls.get_by_phone(phone, create)
         return None
 
     @classmethod
@@ -184,8 +184,8 @@ class Puppet(DBPuppet, BasePuppet):
         return cls.mxid_template.parse(mxid)
 
     @classmethod
-    def get_mxid_from_number(cls, number: str) -> UserID:
-        return UserID(cls.mxid_template.format_full(number))
+    def get_mxid_from_phone(cls, phone: str) -> UserID:
+        return UserID(cls.mxid_template.format_full(phone))
 
     @classmethod
     async def all_with_custom_mxid(cls) -> AsyncGenerator["Puppet", None]:
@@ -193,7 +193,7 @@ class Puppet(DBPuppet, BasePuppet):
         puppet: cls
         for index, puppet in enumerate(puppets):
             try:
-                yield cls.by_number[puppet.number]
+                yield cls.by_phone[puppet.phone]
             except KeyError:
                 puppet._add_to_cache()
                 yield puppet
