@@ -8,7 +8,7 @@ from mautrix.types import EventID, Format, MessageType, TextMessageEventContent
 
 from .. import portal as po
 from .. import puppet as pu
-from ..gupshup.data import ChatInfo
+from ..gupshup.data import ChatInfo, GupshupMessageSender
 from ..util import normalize_number
 from .typehint import CommandEvent
 
@@ -25,7 +25,7 @@ async def _get_puppet_from_cmd(evt: CommandEvent) -> pu.Puppet | None:
         )
         return None
 
-    puppet: pu.Puppet = await pu.Puppet.get_by_phone(phone.replace("+",""))
+    puppet: pu.Puppet = await pu.Puppet.get_by_phone(phone.replace("+", ""))
 
     return puppet
 
@@ -46,13 +46,14 @@ async def pm(evt: CommandEvent) -> EventID:
         chat_id=f"{evt.sender.gs_app}-{puppet.phone}"
     )
 
+    chat_customer = {"phone": puppet.phone, "name": puppet.name or puppet.custom_mxid}
+    customer = GupshupMessageSender.deserialize(chat_customer)
+
     chat_info = {
-        "name": puppet.name or puppet.custom_mxid,
         "app": evt.sender.gs_app,
-        "phone": puppet.phone
     }
-    
     info = ChatInfo.deserialize(chat_info)
+    info.sender = customer
 
     if portal.mxid:
         await evt.reply(

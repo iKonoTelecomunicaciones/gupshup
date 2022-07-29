@@ -114,7 +114,6 @@ class User(DBUser, BaseUser):
 
         return None
 
-
     @classmethod
     @async_getter_lock
     async def get_by_gs_app(cls, gs_app: UserID) -> Optional["User"]:

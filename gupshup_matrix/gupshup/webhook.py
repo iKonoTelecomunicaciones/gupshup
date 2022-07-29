@@ -7,7 +7,13 @@ from aiohttp import web
 from .. import portal as po
 from .. import user as u
 from ..db.gupshup_application import GupshupApplication as DBGupshupApplication
-from .data import GupshupApplication, GupshupEventType, GupshupMessageEvent, GupshupStatusEvent
+from .data import (
+    ChatInfo,
+    GupshupApplication,
+    GupshupEventType,
+    GupshupMessageEvent,
+    GupshupStatusEvent,
+)
 
 
 class GupshupHandler:
@@ -102,7 +108,9 @@ class GupshupHandler:
             self.generate_chat_id(gs_app=data.app, number=data.payload.sender.phone)
         )
         user: u.User = await u.User.get_by_gs_app(data.app)
-        await portal.handle_gupshup_message(user, data)
+        info = ChatInfo.deserialize(data.__dict__)
+        info.sender = data.payload.sender
+        await portal.handle_gupshup_message(user, info, data)
         return web.Response(status=204)
 
     async def status_event(self, data: GupshupStatusEvent) -> web.Response:

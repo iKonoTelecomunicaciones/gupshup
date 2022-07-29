@@ -81,6 +81,7 @@ class Portal(DBPortal, BasePortal):
         self.log = self.log.getChild(self.chat_id or self.phone)
         self._main_intent = None
         self._relay_user = None
+        self.error_codes = self.config["gupshup.error_codes"]
 
     @property
     def main_intent(self) -> IntentAPI:
@@ -138,7 +139,7 @@ class Portal(DBPortal, BasePortal):
             return self.mxid
         async with self._create_room_lock:
             try:
-                self.phone = info.phone
+                self.phone = info.sender.phone
                 return await self._create_matrix_room(source=source, info=info)
             except Exception:
                 self.log.exception("Failed to create portal")
@@ -166,14 +167,13 @@ class Portal(DBPortal, BasePortal):
             },
         ]
 
-
         invites = [source.mxid]
         creation_content = {}
         if not self.config["bridge.federate_rooms"]:
             creation_content["m.federate"] = False
         self.mxid = await self.main_intent.create_room(
             name=self.config["bridge.room_name_template"].format(
-                username=info.name, phone=self.phone
+                username=info.sender.name, phone=self.phone
             ),
             is_direct=self.is_direct,
             initial_state=initial_state,
@@ -190,7 +190,7 @@ class Portal(DBPortal, BasePortal):
 
         self.log.debug(self.phone)
         puppet: p.Puppet = await p.Puppet.get_by_phone(self.phone)
-        puppet.name = info.name
+        puppet.name = info.sender.name
         await self.main_intent.invite_user(
             self.mxid, puppet.mxid, extra_content=self._get_invite_content(puppet)
         )
@@ -275,8 +275,9 @@ class Portal(DBPortal, BasePortal):
     async def save(self) -> None:
         await self.update()
 
-    async def handle_gupshup_message(self, source: u.User, message: GupshupMessageEvent) -> None:
-        info = ChatInfo.deserialize(message.__dict__)
+    async def handle_gupshup_message(
+        self, source: u.User, info: ChatInfo, message: GupshupMessageEvent
+    ) -> None:
         if not await self.create_matrix_room(source=source, info=info):
             return
 
@@ -381,16 +382,16 @@ class Portal(DBPortal, BasePortal):
         if not mxid:
             mxid = await self.main_intent.send_notice(self.mxid, "Contenido no aceptado")
 
-        sender: UserID = p.Puppet.get_mxid_from_phone(message.payload.sender.phone)
-
+        puppet: p.Puppet = await self.get_dm_puppet()
         msg = DBMessage(
             mxid=mxid,
             mx_room=self.mxid,
-            sender=sender,
+            sender=puppet.mxid,
             gsid=message.payload.id,
             gs_app=message.app,
         )
         await msg.insert()
+        asyncio.create_task(puppet.update_info(info))
 
     async def handle_matrix_join(self, user: u.User) -> None:
         if self.is_direct or not await user.is_logged_in():
@@ -412,13 +413,14 @@ class Portal(DBPortal, BasePortal):
             elif status.type == GupshupMessageStatus.ENQUEUED:
                 self.log.debug(f"Ignoring the enqueued message-event")
             elif status.type == GupshupMessageStatus.FAILED:
+                msg = await DBMessage.get_by_gsid(status.id)
                 reason_es = "<strong>Mensaje fallido, por favor intente nuevamente</strong>"
                 if status.body.code in self.error_codes.keys():
                     reason_es = self.error_codes.get(status.body.code).get("reason_es")
                     reason_es = f"<strong>{reason_es}</strong>"
                 if msg:
-                    await self.az.intent.react(self.mxid, msg.mxid, "\u274c")
-                await self.az.intent.send_notice(self.mxid, None, html=reason_es)
+                    await self.main_intent.react(self.mxid, msg.mxid, "\u274c")
+                await self.main_intent.send_notice(self.mxid, None, html=reason_es)
 
     async def handle_matrix_message(
         self,

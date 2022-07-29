@@ -106,7 +106,7 @@ class Puppet(DBPuppet, BasePuppet):
     @classmethod
     def _get_displayname(cls, info: ChatInfo) -> str:
         return cls.config["bridge.displayname_template"].format(
-            displayname=info.name, id=info.phone
+            displayname=info.sender.name, id=info.sender.name
         )
 
     async def _update_name(self, info: ChatInfo) -> bool:

@@ -10,8 +10,6 @@ GupshupAccountID = NewType("GupshupAccountID", str)
 GupshupApplication = NewType("GupshupApplication", str)
 
 
-
-
 class GupshupEventType(str):
     MESSAGE = "message"
     MESSAGE_EVENT = "message-event"
@@ -85,9 +83,8 @@ class GupshupStatusEvent(SerializableAttrs):
     event_type: str = attr.ib(metadata={"json": "type"})
     payload: GupshupPayload = attr.ib(metadata={"json": "payload"})
 
+
 @dataclass
 class ChatInfo(SerializableAttrs):
     sender: GupshupMessageSender = None
-    name: str = ""
     app: GupshupApplication = ""
-    phone: str = ""
