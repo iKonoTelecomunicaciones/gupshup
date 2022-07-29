@@ -1,23 +1,24 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional, cast
 
 from mautrix.appservice import AppService
-from mautrix.bridge import BaseUser
-from mautrix.types import UserID
+from mautrix.bridge import BaseUser, async_getter_lock
+from mautrix.types import RoomID, UserID
 
 from . import portal as po
 from . import puppet as pu
 from .config import Config
+from .db.user import User as DBUser
 
 if TYPE_CHECKING:
     from .__main__ import GupshupBridge
 
 
-class User(BaseUser):
+class User(DBUser, BaseUser):
     by_mxid: Dict[UserID, "User"] = {}
-    by_number: Dict[str, "User"] = {}
+    by_phone: Dict[str, "User"] = {}
 
     config: Config
     az: AppService
@@ -28,18 +29,24 @@ class User(BaseUser):
     is_admin: bool
     permission_level: str
 
-    _is_logged_in: bool
+
+    _sync_lock: asyncio.Lock
+    _notice_room_lock: asyncio.Lock
+    _connected: bool
 
     def __init__(
         self,
         mxid: UserID,
+        phone: str | None = None,
+        notice_room: RoomID | None = None,
     ) -> None:
-        self.mxid = mxid
-        self.number = pu.Puppet.get_number_from_mxid(mxid)
+        super().__init__(mxid=mxid, phone=phone, notice_room=notice_room)
         BaseUser.__init__(self)
+        self._notice_room_lock = asyncio.Lock()
+        self._sync_lock = asyncio.Lock()
+        self._connected = False
         perms = self.config.get_permissions(mxid)
         self.relay_whitelisted, self.is_whitelisted, self.is_admin, self.permission_level = perms
-        self._is_logged_in = True
 
     @classmethod
     def init_cls(cls, bridge: "GupshupBridge") -> None:
@@ -52,27 +59,54 @@ class User(BaseUser):
         return await po.Portal.get_by_chat_id(puppet.number, create=create)
 
     async def is_logged_in(self) -> bool:
-        return True
+        return bool(self.phone)
+
+    async def needs_relay(self, portal: po.Portal) -> bool:
+        return not await self.is_logged_in() or portal.is_direct
 
     async def get_puppet(self) -> pu.Puppet | None:
         if not self.mxid:
             return None
         return await pu.Puppet.get_by_mxid(self.mxid)
 
+    def _add_to_cache(self) -> None:
+        self.by_mxid[self.mxid] = self
+        if self.phone:
+            self.by_phone[self.phone] = self
+
     @classmethod
-    async def get_by_mxid(cls, mxid: UserID) -> Optional["User"]:
-        if await pu.Puppet.get_by_mxid(mxid) is not None or mxid == cls.az.bot_mxid:
+    async def get_by_mxid(cls, mxid: UserID, create: bool = True) -> Optional["User"]:
+        if pu.Puppet.get_id_from_mxid(mxid):
             return None
         try:
             return cls.by_mxid[mxid]
         except KeyError:
-            return cls(mxid=mxid)
+            pass
+
+        user = cast(cls, await super().get_by_mxid(mxid))
+        if user is not None:
+            user._add_to_cache()
+            return user
+
+        if create:
+            user = cls(mxid)
+            await user.insert()
+            user._add_to_cache()
+            return user
+
+        return None
 
     @classmethod
-    async def get_by_number(cls, number: UserID) -> Optional["User"]:
-        if await pu.Puppet.get_by_number(number) is not None:
-            return None
+    @async_getter_lock
+    async def get_by_phone(cls, phone: UserID) -> Optional["User"]:
         try:
-            return cls.by_number[number]
+            return cls.by_phone[phone]
         except KeyError:
-            return cls(number=number)
+            pass
+
+        user = cast(cls, await super().get_by_phone(phone))
+        if user is not None:
+            user._add_to_cache()
+            return user
+
+        return None

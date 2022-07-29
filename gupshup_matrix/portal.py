@@ -194,7 +194,7 @@ class Portal(DBPortal, BasePortal):
             raise Exception("Failed to create room: no mxid returned")
 
         self.log.debug(self.number)
-        puppet: p.Puppet = await p.Puppet.get_by_number(self.number)
+        puppet: p.Puppet = await p.Puppet.get_by_phone(self.number)
         puppet.name = message.payload.sender.name
         await self.main_intent.invite_user(
             self.mxid, puppet.mxid, extra_content=self._get_invite_content(puppet)
@@ -275,11 +275,10 @@ class Portal(DBPortal, BasePortal):
     async def get_dm_puppet(self) -> p.Puppet | None:
         if not self.is_direct:
             return None
-        return await p.Puppet.get_by_number(self.number)
+        return await p.Puppet.get_by_phone(self.number)
 
     async def save(self) -> None:
-        # await self.update()
-        pass
+        await self.update()
 
     async def handle_gupshup_message(self, message: GupshupMessageEvent) -> None:
 
@@ -391,6 +390,11 @@ class Portal(DBPortal, BasePortal):
         )
         await msg.insert()
 
+
+    async def handle_matrix_join(self, user: u.User) -> None:
+        if self.is_direct or not await user.is_logged_in():
+            return
+
     async def handle_gupshup_status(self, status: GupshupPayload) -> None:
         if not self.mxid:
             return
@@ -424,6 +428,9 @@ class Portal(DBPortal, BasePortal):
         additional_data: Optional[dict] = None,
     ) -> None:
         orig_sender = sender
+        self.log.debug(self._relay_user)
+        self.log.debug(self.relay_user_id)
+        self.log.debug(sender.__dict__)
         sender, is_relay = await self.get_relay_sender(sender, f"message {event_id}")
         if is_relay:
             await self.apply_relay_message_format(orig_sender, message)
@@ -499,7 +506,8 @@ class Portal(DBPortal, BasePortal):
             pass
 
         portal = cast(cls, await super().get_by_mxid(mxid))
-        if portal:
+        if portal is not None:
+            await portal.postinit()
             return portal
 
         return None

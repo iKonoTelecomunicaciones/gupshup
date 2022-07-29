@@ -68,7 +68,7 @@ class Puppet:
         return cls._from_row(row)
 
     @classmethod
-    async def get_by_number(cls, number: str) -> Puppet | None:
+    async def get_by_phone(cls, number: str) -> Puppet | None:
         q = (
             "SELECT  number, name, is_registered, custom_mxid, access_token, next_batch, base_url "
             "FROM puppet WHERE number=$1"

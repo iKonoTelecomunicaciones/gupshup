@@ -131,13 +131,13 @@ class Puppet(DBPuppet, BasePuppet):
 
     @classmethod
     @async_getter_lock
-    async def get_by_number(cls, number: str, create: bool = True) -> Optional["Puppet"]:
+    async def get_by_phone(cls, number: str, create: bool = True) -> Optional["Puppet"]:
         try:
             return cls.by_number[number]
         except KeyError:
             pass
 
-        puppet = cast(cls, await super().get_by_number(number))
+        puppet = cast(cls, await super().get_by_phone(number))
         if puppet is not None:
             puppet._add_to_cache()
             return puppet
@@ -161,7 +161,7 @@ class Puppet(DBPuppet, BasePuppet):
     async def get_by_mxid(cls, mxid: UserID, create: bool = True) -> Optional["Puppet"]:
         number = cls.get_number_from_mxid(mxid)
         if number:
-            return await cls.get_by_number(number, create)
+            return await cls.get_by_phone(number, create)
         return None
 
     @classmethod

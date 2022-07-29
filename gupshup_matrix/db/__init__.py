@@ -5,10 +5,11 @@ from .message import Message
 from .portal import Portal
 from .puppet import Puppet
 from .upgrade import upgrade_table
+from .user import User
 
 
 def init(db: Database) -> None:
-    for table in (Puppet, Portal, Message, GupshupApplication):
+    for table in (Puppet, Portal, User, Message, GupshupApplication):
         table.db = db
 
 

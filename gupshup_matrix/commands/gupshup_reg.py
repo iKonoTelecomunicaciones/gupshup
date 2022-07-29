@@ -10,6 +10,8 @@ SECTION_ACCOUNT = HelpSection("Account", 40, "")
     help_section=SECTION_ACCOUNT,
     help_args="<gs_app_name> <gs_app_phone> <api_key> <app_id>",
     help_text="Register a new gupshup application.",
+    management_only=True,
+    needs_auth=False,
 )
 async def register_app(evt: CommandEvent):
 
@@ -44,4 +46,6 @@ async def register_app(evt: CommandEvent):
     except Exception as e:
         evt.log.exception(e)
 
+    evt.sender.phone = gs_app_phone
+    await evt.sender.update()
     await evt.reply("Application a has been successfully registered")
