@@ -57,7 +57,6 @@ class MatrixHandler(BaseMatrixHandler):
                     portal.mxid, f"Failed to invite {user.mxid} on Gupshup: {e}"
                 )
 
-
     async def send_welcome_message(self, room_id: RoomID, inviter: u.User) -> None:
         await super().send_welcome_message(room_id, inviter)
         if not inviter.notice_room:

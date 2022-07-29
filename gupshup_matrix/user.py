@@ -29,7 +29,6 @@ class User(DBUser, BaseUser):
     is_admin: bool
     permission_level: str
 
-
     _sync_lock: asyncio.Lock
     _notice_room_lock: asyncio.Lock
     _connected: bool

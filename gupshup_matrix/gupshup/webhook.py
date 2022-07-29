@@ -55,7 +55,9 @@ class GupshupHandler:
         self.log.debug(f"The event arrives {data}")
 
         if not data.get("app") in await DBGupshupApplication.get_all_gs_apps():
-            self.log.warning(f"Ignoring event because the gs_app [{data.get('app')}] is not registered.")
+            self.log.warning(
+                f"Ignoring event because the gs_app [{data.get('app')}] is not registered."
+            )
             return web.Response(status=406)
 
         if data.get("type") == GupshupEventType.MESSAGE:

@@ -390,7 +390,6 @@ class Portal(DBPortal, BasePortal):
         )
         await msg.insert()
 
-
     async def handle_matrix_join(self, user: u.User) -> None:
         if self.is_direct or not await user.is_logged_in():
             return
