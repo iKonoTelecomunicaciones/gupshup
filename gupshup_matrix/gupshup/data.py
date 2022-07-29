@@ -1,4 +1,4 @@
-from typing import NewType
+from typing import NewType, Optional
 
 import attr
 from attr import dataclass
@@ -8,6 +8,8 @@ GupshupMessageID = NewType("GupshupMessageID", str)
 GupshupUserID = NewType("GupshupUserID", str)
 GupshupAccountID = NewType("GupshupAccountID", str)
 GupshupApplication = NewType("GupshupApplication", str)
+
+
 
 
 class GupshupEventType(str):
@@ -82,3 +84,10 @@ class GupshupStatusEvent(SerializableAttrs):
     timestamp: str = attr.ib(metadata={"json": "timestamp"})
     event_type: str = attr.ib(metadata={"json": "type"})
     payload: GupshupPayload = attr.ib(metadata={"json": "payload"})
+
+@dataclass
+class ChatInfo(SerializableAttrs):
+    sender: GupshupMessageSender = None
+    name: str = ""
+    app: GupshupApplication = ""
+    phone: str = ""

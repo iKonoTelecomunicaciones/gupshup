@@ -47,5 +47,6 @@ async def register_app(evt: CommandEvent):
         evt.log.exception(e)
 
     evt.sender.phone = gs_app_phone
+    evt.sender.gs_app = gs_app_name
     await evt.sender.update()
     await evt.reply("Application a has been successfully registered")

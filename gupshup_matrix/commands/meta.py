@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 
 from markdown import markdown
@@ -5,43 +7,62 @@ from mautrix.bridge.commands import HelpSection, command_handler
 from mautrix.types import EventID, Format, MessageType, TextMessageEventContent
 
 from .. import portal as po
+from .. import puppet as pu
+from ..gupshup.data import ChatInfo
+from ..util import normalize_number
 from .typehint import CommandEvent
 
 SECTION_MISC = HelpSection("Miscellaneous", 40, "")
 
 
+async def _get_puppet_from_cmd(evt: CommandEvent) -> pu.Puppet | None:
+    try:
+        phone = normalize_number("".join(evt.args))
+    except Exception:
+        await evt.reply(
+            f"**Usage:** `$cmdprefix+sp {evt.command} <phone>` "
+            "(enter phone number in international format)"
+        )
+        return None
+
+    puppet: pu.Puppet = await pu.Puppet.get_by_phone(phone.replace("+",""))
+
+    return puppet
+
+
 @command_handler(
+    needs_auth=True,
+    management_only=False,
     help_section=SECTION_MISC,
-    help_args="<international phone number>",
-    help_text="Open a private chat with the given phone number.",
+    help_args="<_phone_>",
+    help_text="Open a private chat portal with a specific phone number",
 )
 async def pm(evt: CommandEvent) -> EventID:
-    if evt.is_portal:
-        return await evt.reply("You must use this command in management room.")
+    puppet = await _get_puppet_from_cmd(evt)
+    if not puppet:
+        return
 
-    if len(evt.args) == 0:
-        return await evt.reply("**Usage:** `$cmdprefix+sp pm <international phone number>`")
+    portal: po.Portal = await po.Portal.get_by_chat_id(
+        chat_id=f"{evt.sender.gs_app}-{puppet.phone}"
+    )
 
-    phone_number = "".join(evt.args).translate({ord(c): None for c in "+()- "})
-    try:
-        int(phone_number)
-    except ValueError:
-        return await evt.reply("Invalid phone number.")
-
-    portal = po.Portal.get_by_chat_id(gsid=phone_number)
+    chat_info = {
+        "name": puppet.name or puppet.custom_mxid,
+        "app": evt.sender.gs_app,
+        "phone": puppet.phone
+    }
+    
+    info = ChatInfo.deserialize(chat_info)
 
     if portal.mxid:
-        return await evt.reply(
-            f"You already have a private chat portal with that user at "
-            f'<a href="https://matrix.to/#/{portal.mxid}">{portal.mxid}</a>',
-            allow_html=True,
-            render_markdown=False,
+        await evt.reply(
+            f"You already have a private chat with {puppet.name}: "
+            f"[{portal.mxid}](https://matrix.to/#/{portal.mxid})"
         )
+        await portal.main_intent.invite_user(portal.mxid, evt.sender.mxid)
+        return
 
-    try:
-        await portal.create_matrix_room()
-    except Exception as err:
-        return await evt.reply(f"Failed to create portal room: {err}")
+    await portal.create_matrix_room(evt.sender, info)
 
     return await evt.reply("Created portal room and invited you to it.")
 

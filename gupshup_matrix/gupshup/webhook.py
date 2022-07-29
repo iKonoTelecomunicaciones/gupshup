@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional, Tuple
 from aiohttp import web
 
 from .. import portal as po
-from ..config import Config
+from .. import user as u
 from ..db.gupshup_application import GupshupApplication as DBGupshupApplication
 from .data import GupshupApplication, GupshupEventType, GupshupMessageEvent, GupshupStatusEvent
 
@@ -101,7 +101,8 @@ class GupshupHandler:
         portal: po.Portal = await po.Portal.get_by_chat_id(
             self.generate_chat_id(gs_app=data.app, number=data.payload.sender.phone)
         )
-        await portal.handle_gupshup_message(data)
+        user: u.User = await u.User.get_by_gs_app(data.app)
+        await portal.handle_gupshup_message(user, data)
         return web.Response(status=204)
 
     async def status_event(self, data: GupshupStatusEvent) -> web.Response:

@@ -8,15 +8,15 @@ upgrade_table = UpgradeTable()
 async def upgrade_v1(conn: Connection) -> None:
     await conn.execute(
         """CREATE TABLE portal (
-        chat_id          TEXT PRIMARY KEY,
-        number          TEXT,
+        chat_id         TEXT PRIMARY KEY,
+        phone           TEXT,
         mxid            TEXT,
         relay_user_id   TEXT
     )"""
     )
     await conn.execute(
         """CREATE TABLE puppet (
-        number        TEXT PRIMARY KEY,
+        phone         TEXT PRIMARY KEY,
         name          TEXT,
         is_registered BOOLEAN NOT NULL DEFAULT false,
         custom_mxid   TEXT,
@@ -29,6 +29,7 @@ async def upgrade_v1(conn: Connection) -> None:
         """CREATE TABLE "user" (
             mxid        TEXT PRIMARY KEY,
             phone       TEXT,
+            gs_app      TEXT,
             notice_room TEXT
         )"""
     )
