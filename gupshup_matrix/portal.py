@@ -294,10 +294,10 @@ class Portal(DBPortal, BasePortal):
             try:
                 mxc = await self.main_intent.upload_media(data=data)
             except MUnknown as e:
-                self.log.error(f"{message} :: error {e}")
+                self.log.exception(f"{message} :: error {e}")
                 return
             except Exception as e:
-                self.log.error(f"Message not receive :: error {e}")
+                self.log.exception(f"Message not receive :: error {e}")
                 return
 
             if message.payload.type in ("image", "video"):
