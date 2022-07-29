@@ -427,9 +427,6 @@ class Portal(DBPortal, BasePortal):
         additional_data: Optional[dict] = None,
     ) -> None:
         orig_sender = sender
-        self.log.debug(self._relay_user)
-        self.log.debug(self.relay_user_id)
-        self.log.debug(sender.__dict__)
         sender, is_relay = await self.get_relay_sender(sender, f"message {event_id}")
         if is_relay:
             await self.apply_relay_message_format(orig_sender, message)
