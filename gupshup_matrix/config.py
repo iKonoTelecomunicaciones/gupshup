@@ -42,6 +42,9 @@ class Config(BaseBridgeConfig):
 
         copy_dict("bridge.permissions")
 
+        copy("bridge.relay.enabled")
+        copy_dict("bridge.relay.message_formats")
+
         copy("gupshup.base_url")
         copy("gupshup.webhook_path")
         copy("gupshup.error_codes")

@@ -53,8 +53,8 @@ class GupshupBridge(Bridge):
         for puppet in Puppet.by_custom_mxid.values():
             puppet.stop()
 
-    async def get_user(self, user_id: UserID) -> User:
-        return await User.get_by_mxid(user_id)
+    async def get_user(self, user_id: UserID, create: bool = True) -> User:
+        return await User.get_by_mxid(user_id, create=create)
 
     async def get_portal(self, room_id: RoomID) -> Portal:
         return await Portal.get_by_mxid(room_id)
@@ -69,7 +69,7 @@ class GupshupBridge(Bridge):
         return bool(Puppet.get_id_from_mxid(user_id))
 
     async def count_logged_in_users(self) -> int:
-        return None
+        return len([user for user in User.by_phone.values() if user.phone])
 
 
 GupshupBridge().run()

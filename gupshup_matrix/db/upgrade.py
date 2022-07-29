@@ -26,6 +26,13 @@ async def upgrade_v1(conn: Connection) -> None:
     )"""
     )
     await conn.execute(
+        """CREATE TABLE "user" (
+            mxid        TEXT PRIMARY KEY,
+            phone       TEXT,
+            notice_room TEXT
+        )"""
+    )
+    await conn.execute(
         """CREATE TABLE message (
         mxid        TEXT NOT NULL,
         mx_room     TEXT NOT NULL,
