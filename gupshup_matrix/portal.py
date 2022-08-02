@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from string import Template
-from turtle import update
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
 
 from mautrix.appservice import AppService, IntentAPI

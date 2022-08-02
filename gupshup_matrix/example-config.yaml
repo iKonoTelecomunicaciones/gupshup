@@ -156,9 +156,6 @@ gupshup:
 logging:
     version: 1
     formatters:
-        colored:
-            (): gupshup_matrix.util.ColorFormatter
-            format: "[%(asctime)s] [%(levelname)s@%(name)s] %(message)s"
         normal:
             format: "[%(asctime)s] [%(levelname)s@%(name)s] %(message)s"
     handlers:
@@ -168,9 +165,6 @@ logging:
             filename: ./gupshup-matrix.log
             maxBytes: 10485760
             backupCount: 10
-        console:
-            class: logging.StreamHandler
-            formatter: colored
     loggers:
         mau:
             level: DEBUG
@@ -180,4 +174,4 @@ logging:
             level: INFO
     root:
         level: DEBUG
-        handlers: [file, console]
+        handlers: [file]
