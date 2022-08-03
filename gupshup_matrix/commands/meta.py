@@ -94,7 +94,7 @@ async def template(evt: CommandEvent) -> EventID:
     msg = TextMessageEventContent(body=template_message, msgtype=MessageType.TEXT)
     msg.trim_reply_fallback()
 
-    portal = po.Portal.get_by_mxid(room_id)
+    portal: po.Portal = await po.Portal.get_by_mxid(room_id)
     if not portal:
         return await evt.reply(f"Failed to get room {room_id}")
 
@@ -148,7 +148,7 @@ async def interactive_message(evt: CommandEvent) -> EventID:
     if not interactive_message or not message:
         return await evt.reply("You must specify an interactive_message and message.")
 
-    portal = po.Portal.get_by_mxid(room_id)
+    portal = await po.Portal.get_by_mxid(room_id)
     if not portal:
         return await evt.reply(f"Failed to get room {room_id}")
 
