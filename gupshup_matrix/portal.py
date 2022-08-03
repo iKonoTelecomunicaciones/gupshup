@@ -46,7 +46,6 @@ class Portal(DBPortal, BasePortal):
     by_chat_id: Dict[RoomID, "Portal"] = {}
     by_chat_id: Dict[str, "Portal"] = {}
 
-    homeserver_address: str
     google_maps_url: str
     message_template: Template
     bridge_notices: bool
@@ -54,7 +53,6 @@ class Portal(DBPortal, BasePortal):
     invite_users: List[UserID]
     initial_state: Dict[str, Dict[str, Any]]
     auto_change_room_name: bool
-    error_codes: Dict[str, Dict[str, Any]]
 
     az: AppService
     private_chat_portal_meta: bool
@@ -82,6 +80,7 @@ class Portal(DBPortal, BasePortal):
         self._main_intent = None
         self._relay_user = None
         self.error_codes = self.config["gupshup.error_codes"]
+        self.homeserver_address = self.config["homeserver.public_address"]
 
     @property
     def main_intent(self) -> IntentAPI:
@@ -463,7 +462,7 @@ class Portal(DBPortal, BasePortal):
         ):
             url = f"{self.homeserver_address}/_matrix/media/r0/download/{message.url[6:]}"
             resp = await self.gsc.send_message(
-                media=url, body=message.body, msgtype=message.msgtype
+                data=await self.main_data_gs, media=url, body=message.body, msgtype=message.msgtype
             )
         elif message.msgtype == MessageType.LOCATION:
             resp = await self.gsc.send_location(
