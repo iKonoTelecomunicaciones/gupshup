@@ -39,6 +39,7 @@ class Config(BaseBridgeConfig):
 
         copy("bridge.federate_rooms")
         copy("bridge.initial_state")
+        copy("bridge.bridge_notices")
 
         copy_dict("bridge.permissions")
 

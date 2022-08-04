@@ -48,7 +48,6 @@ class Portal(DBPortal, BasePortal):
 
     google_maps_url: str
     message_template: Template
-    bridge_notices: bool
     federate_rooms: bool
     invite_users: List[UserID]
     initial_state: Dict[str, Dict[str, Any]]
@@ -434,6 +433,9 @@ class Portal(DBPortal, BasePortal):
 
         if message.get_reply_to():
             await DBMessage.get_by_mxid(message.get_reply_to(), self.mxid)
+
+        if message.msgtype == MessageType.NOTICE and not self.config["bridge.bridge_notices"]:
+            return
 
         if message.msgtype in (MessageType.TEXT, MessageType.NOTICE):
 
