@@ -31,8 +31,8 @@ async def _get_puppet_from_cmd(evt: CommandEvent) -> pu.Puppet | None:
 
 
 @command_handler(
-    needs_auth=True,
-    management_only=False,
+    needs_auth=False,
+    management_only=True,
     help_section=SECTION_MISC,
     help_args="<_phone_>",
     help_text="Open a private chat portal with a specific phone number",
@@ -69,6 +69,7 @@ async def pm(evt: CommandEvent) -> EventID:
 
 
 @command_handler(
+    needs_auth=False,
     help_section=SECTION_MISC,
     help_args='{"room_id": "", "template_message": ""}',
     help_text="Send a Gupshup template",
@@ -110,6 +111,7 @@ async def template(evt: CommandEvent) -> EventID:
 
 
 @command_handler(
+    needs_auth=False,
     help_section=SECTION_MISC,
     help_args='{"room_id": "", "interactive_message": dict}',
     help_text="Send a Gupshup interactive message",
