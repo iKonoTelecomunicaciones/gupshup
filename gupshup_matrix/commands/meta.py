@@ -58,7 +58,7 @@ async def pm(evt: CommandEvent) -> EventID:
     if portal.mxid:
         await evt.reply(
             f"You already have a private chat with {puppet.name}: "
-            f"[{portal.mxid}](https://matrix.to/#/{portal.mxid})"
+            f"[{portal.mxid}](https://matrix.to/#/{portal.mxid})",
         )
         await portal.main_intent.invite_user(portal.mxid, evt.sender.mxid)
         return
