@@ -31,8 +31,8 @@ async def _get_puppet_from_cmd(evt: CommandEvent) -> pu.Puppet | None:
 
 
 @command_handler(
-    needs_auth=False,
-    management_only=True,
+    needs_auth=True,
+    management_only=False,
     help_section=SECTION_MISC,
     help_args="<_phone_>",
     help_text="Open a private chat portal with a specific phone number",
