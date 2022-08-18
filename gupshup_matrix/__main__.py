@@ -11,6 +11,7 @@ from .portal import Portal
 from .puppet import Puppet
 from .user import User
 from .version import linkified_version, version
+from .web import ProvisioningAPI
 
 
 class GupshupBridge(Bridge):
@@ -29,6 +30,8 @@ class GupshupBridge(Bridge):
     gupshup: GupshupHandler
     gupshup_client: GupshupClient
 
+    provisioning_api: ProvisioningAPI
+
     def preinit(self) -> None:
         super().preinit()
 
@@ -41,6 +44,11 @@ class GupshupBridge(Bridge):
         super().prepare_bridge()
         self.gupshup_client = GupshupClient(config=self.config, loop=self.loop)
         self.az.app.add_subapp(self.config["gupshup.webhook_path"], self.gupshup.app)
+        cfg = self.config["bridge.provisioning"]
+        self.provisioning_api = ProvisioningAPI(
+            shared_secret=cfg["shared_secret"],
+        )
+        self.az.app.add_subapp(cfg["prefix"], self.provisioning_api.app)
 
     async def start(self) -> None:
         User.init_cls(self)
