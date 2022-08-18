@@ -185,6 +185,8 @@ logging:
     loggers:
         mau:
             level: DEBUG
+        gupshup:
+            level: DEBUG
         aiohttp:
             level: INFO
     root:

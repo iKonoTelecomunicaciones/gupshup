@@ -13,7 +13,7 @@ from .. import portal as po
 from .. import puppet as pu
 from .. import user as u
 from ..db.gupshup_application import GupshupApplication
-from ..gupshup.data import ChatInfo, GupshupMessageSender
+from ..gupshup.data import ChatInfo, GupshupMessageSender, InteractiveMessage
 from ..util import normalize_number
 
 
@@ -234,6 +234,79 @@ class ProvisioningAPI:
         return web.json_response(data={"detail": "Template has been sent"})
 
     async def interactive_message(self, request: web.Request) -> web.Response:
+        """
+        QuickReplay:
+
+        ```
+        {
+            "room_id": "!foo:foo.com",
+            "message": "Example of QuickReplay \n How are you? \n1. I am well \n2. I am bad",
+            "interactive_message": {
+                "type": "quick_reply",
+                "content": {
+                    "type": "text",
+                    "header": "Hola, bienvenido al canal de WhatsApp de Provisi\u00f3n.\n\n",
+                    "text": "Por favor selecciona una de las siguientes opciones",
+                    "caption": "",
+                    "filename": null,
+                    "url": null
+                },
+                "options": [
+                    {"type": "text", "title": "Acepto", "description": null, "postbackText": null},
+                    {"type": "text", "title": "No Acepto", "description": null, "postbackText": null}
+                ]
+            }
+        }
+        ```
+
+        ListReplay:
+
+        ```
+        {
+            "room_id": "!foo:foo.com",
+            "message": "Quiero hacer un pedido",
+            "interactive_message": {
+                "type": "list",
+                "title": "",
+                "body": "Hello World",
+                "msgid": "!foo:foo.com",
+                "globalButtons": [{"type": "text", "title": "Abrir"}],
+                "items": [
+                    {
+                        "title": "Titulo de seccion",
+                        "subtitle": "Subtitulo de seccion",
+                        "options": [
+                            {
+                                "type": "text",
+                                "title": "Quiero hacer un pedido",
+                                "description": null,
+                                "postbackText": "1"
+                            },
+                            {
+                                "type": "text",
+                                "title": "Quiero hacer un pedido",
+                                "description": null,
+                                "postbackText": "2"
+                            },
+                            {
+                                "type": "text",
+                                "title": "Duiero hacer un pedido",
+                                "description": null,
+                                "postbackText": "3"
+                            },
+                            {
+                                "type": "text",
+                                "title": "Ir atras",
+                                "description": null,
+                                "postbackText": "4"
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+        ```
+        """
         user, data = await self._get_user(request)
 
         try:
@@ -262,6 +335,8 @@ class ProvisioningAPI:
                 headers=self._acao_headers,
             )
 
+        i = InteractiveMessage.deserialize(interactive_message)
+
         msg = TextMessageEventContent(
             body=message,
             msgtype=MessageType.TEXT,
@@ -289,7 +364,7 @@ class ProvisioningAPI:
             additional_data=interactive_message,
         )
 
-        return web.json_response(data={"detail": "Interactive message has been send"})
+        return web.json_response(data={"detail_1": i.json()})
 
     async def _get_user(self, request: web.Request, read_body: bool = True) -> tuple[u.User, JSON]:
         user = await self.check_token(request)
