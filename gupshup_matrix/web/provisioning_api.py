@@ -239,7 +239,7 @@ class ProvisioningAPI:
 
         ```
         {
-            "room_id": "!UTPOulJWTOijXRlykd:ikono.net.co",
+            "room_id": "!foo:foo.com",
             "interactive_message": {
                 "type": "quick_reply",
                 "content": {
@@ -263,12 +263,12 @@ class ProvisioningAPI:
 
         ```
         {
-            "room_id": "!UTPOulJWTOijXRlykd:ikono.net.co",
+            "room_id": "!foo:foo.com",
             "interactive_message": {
                 "type": "list",
                 "title": "Main title",
                 "body": "Hello World",
-                "msgid": "!UTPOulJWTOijXRlykd:ikono.net.co",
+                "msgid": "!foo:foo.com",
                 "globalButtons": [{"type": "text", "title": "Open"}],
                 "items": [
                     {
