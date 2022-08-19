@@ -239,64 +239,63 @@ class ProvisioningAPI:
 
         ```
         {
-            "room_id": "!foo:foo.com",
-            "message": "Example of QuickReplay \n How are you? \n1. I am well \n2. I am bad",
+            "room_id": "!UTPOulJWTOijXRlykd:ikono.net.co",
             "interactive_message": {
                 "type": "quick_reply",
                 "content": {
                     "type": "text",
-                    "header": "Hola, bienvenido al canal de WhatsApp de Provisi\u00f3n.\n\n",
-                    "text": "Por favor selecciona una de las siguientes opciones",
+                    "header": "Hello, This is the header.\n\n",
+                    "text": "Please select one of the following options",
                     "caption": "",
                     "filename": null,
                     "url": null
                 },
                 "options": [
-                    {"type": "text", "title": "Acepto", "description": null, "postbackText": null},
-                    {"type": "text", "title": "No Acepto", "description": null, "postbackText": null}
+                    {"type": "text", "title": "I agree", "description": null, "postbackText": null},
+                    {"type": "text", "title": "No Accept", "description": null, "postbackText": null}
                 ]
             }
         }
         ```
 
+
         ListReplay:
 
         ```
         {
-            "room_id": "!foo:foo.com",
-            "message": "Quiero hacer un pedido",
+            "room_id": "!UTPOulJWTOijXRlykd:ikono.net.co",
             "interactive_message": {
                 "type": "list",
-                "title": "",
+                "title": "Main title",
                 "body": "Hello World",
-                "msgid": "!foo:foo.com",
-                "globalButtons": [{"type": "text", "title": "Abrir"}],
+                "msgid": "!UTPOulJWTOijXRlykd:ikono.net.co",
+                "globalButtons": [{"type": "text", "title": "Open"}],
                 "items": [
                     {
-                        "title": "Titulo de seccion",
-                        "subtitle": "Subtitulo de seccion",
+                        "title": "Section title",
+                        "subtitle": "SubSection title",
                         "options": [
                             {
                                 "type": "text",
-                                "title": "Quiero hacer un pedido",
+                                "title": "Option 1",
                                 "description": null,
                                 "postbackText": "1"
                             },
                             {
                                 "type": "text",
-                                "title": "Quiero hacer un pedido",
+                                "title": "Option 2",
                                 "description": null,
                                 "postbackText": "2"
                             },
                             {
                                 "type": "text",
-                                "title": "Duiero hacer un pedido",
+                                "title": "Option 3",
                                 "description": null,
                                 "postbackText": "3"
                             },
                             {
                                 "type": "text",
-                                "title": "Ir atras",
+                                "title": "Option 4",
                                 "description": null,
                                 "postbackText": "4"
                             }
@@ -311,7 +310,6 @@ class ProvisioningAPI:
 
         try:
             room_id = data["room_id"]
-            message = data["message"]
             interactive_message = data["interactive_message"]
         except KeyError as e:
             raise self._missing_key_error(e)
@@ -322,12 +320,6 @@ class ProvisioningAPI:
                 status=400,
                 headers=self._acao_headers,
             )
-        elif not message:
-            return web.json_response(
-                data={"error": "message not entered", "state": "missing-field"},
-                status=400,
-                headers=self._acao_headers,
-            )
         elif not interactive_message:
             return web.json_response(
                 data={"error": "interactive_message not entered", "state": "missing-field"},
@@ -335,12 +327,12 @@ class ProvisioningAPI:
                 headers=self._acao_headers,
             )
 
-        i = InteractiveMessage.deserialize(interactive_message)
+        interactive_message = InteractiveMessage.deserialize(interactive_message)
 
         msg = TextMessageEventContent(
-            body=message,
+            body=interactive_message.message,
             msgtype=MessageType.TEXT,
-            formatted_body=markdown(message),
+            formatted_body=markdown(interactive_message.message.replace("\n", "<br>")),
             format=Format.HTML,
         )
 
@@ -364,7 +356,7 @@ class ProvisioningAPI:
             additional_data=interactive_message,
         )
 
-        return web.json_response(data={"detail_1": i.json()})
+        return web.json_response(data={"detail_1": interactive_message.message})
 
     async def _get_user(self, request: web.Request, read_body: bool = True) -> tuple[u.User, JSON]:
         user = await self.check_token(request)
