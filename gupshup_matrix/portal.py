@@ -176,6 +176,7 @@ class Portal(DBPortal, BasePortal):
             is_direct=self.is_direct,
             initial_state=initial_state,
             invitees=invites,
+            topic="WhatsApp private chat",
             creation_content=creation_content,
             # Make sure the power level event in initial_state is allowed
             # even if the server sends a default power level event before it.
