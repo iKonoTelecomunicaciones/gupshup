@@ -123,11 +123,13 @@ class InteractiveMessage(SerializableAttrs):
     title: str = attr.ib(default=None, metadata={"json": "title"})
     body: str = attr.ib(default=None, metadata={"json": "body"})
     msgid: str = attr.ib(default=None, metadata={"json": "msgid"})
-    global_buttons: List[GlobalButtonsListReplay] = attr.ib(metadata={"json": "globalButtons"}, factory=list)
+    global_buttons: List[GlobalButtonsListReplay] = attr.ib(
+        metadata={"json": "globalButtons"}, factory=list
+    )
     items: List[ItemListReplay] = attr.ib(metadata={"json": "items"}, factory=list)
 
     @property
-    def message(self)-> str:
+    def message(self) -> str:
         msg = ""
 
         if self.type == "quick_reply":
@@ -144,6 +146,7 @@ class InteractiveMessage(SerializableAttrs):
                     msg = f"{msg}\n{option.postback_text}. {option.title}"
 
         return msg
+
 
 @dataclass
 class ChatInfo(SerializableAttrs):
