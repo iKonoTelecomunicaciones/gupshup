@@ -127,14 +127,14 @@ class ProvisioningAPI:
             if await GupshupApplication.get_by_admin_user(admin_user=user.mxid):
                 return web.json_response(
                     data={"error": "You already have a registered gs_app"},
-                    status=500,
+                    status=422,
                     headers=self._acao_headers,
                 )
 
             if await GupshupApplication.get_by_number(number=gs_app_phone):
                 return web.json_response(
                     data={"error": f"This gs_app {gs_app_name} is already registered"},
-                    status=500,
+                    status=422,
                     headers=self._acao_headers,
                 )
 
@@ -148,7 +148,7 @@ class ProvisioningAPI:
         except Exception as e:
             return web.json_response(
                 data={"error": e},
-                status=500,
+                status=422,
                 headers=self._acao_headers,
             )
 
