@@ -20,7 +20,7 @@ class Config(BaseBridgeConfig):
     def do_update(self, helper: ConfigUpdateHelper) -> None:
         super().do_update(helper)
 
-        copy, copy_dict, _ = helper
+        copy, copy_dict, base = helper
 
         copy("homeserver.public_address")
 
@@ -40,6 +40,12 @@ class Config(BaseBridgeConfig):
         copy("bridge.federate_rooms")
         copy("bridge.initial_state")
         copy("bridge.bridge_notices")
+
+        copy("bridge.provisioning.enabled")
+        copy("bridge.provisioning.prefix")
+        copy("bridge.provisioning.shared_secret")
+        if base["bridge.provisioning.shared_secret"] == "generate":
+            base["bridge.provisioning.shared_secret"] = self._new_token()
 
         copy_dict("bridge.permissions")
 

@@ -1,4 +1,4 @@
-from typing import NewType, Optional
+from typing import Dict, List, NewType, Optional
 
 import attr
 from attr import dataclass
@@ -83,6 +83,67 @@ class GupshupStatusEvent(SerializableAttrs):
     event_type: str = attr.ib(metadata={"json": "type"})
     payload: GupshupPayload = attr.ib(metadata={"json": "payload"})
 
+
+@dataclass
+class ContentQuickReplay(SerializableAttrs):
+    type: str = attr.ib(default=None, metadata={"json": "type"})
+    header: str = attr.ib(default=None, metadata={"json": "header"})
+    text: str = attr.ib(default=None, metadata={"json": "text"})
+    caption: str = attr.ib(default=None, metadata={"json": "caption"})
+    filename: str = attr.ib(default=None, metadata={"json": "filename"})
+    url: str = attr.ib(default=None, metadata={"json": "url"})
+
+
+@dataclass
+class InteractiveMessageOption(SerializableAttrs):
+    type: str = attr.ib(default=None, metadata={"json": "type"})
+    title: str = attr.ib(default=None, metadata={"json": "title"})
+    description: str = attr.ib(default=None, metadata={"json": "description"})
+    postback_text: str = attr.ib(default=None, metadata={"json": "postbackText"})
+
+
+@dataclass
+class ItemListReplay(SerializableAttrs):
+    title: str = attr.ib(default=None, metadata={"json": "title"})
+    subtitle: str = attr.ib(default=None, metadata={"json": "subtitle"})
+    options: List[InteractiveMessageOption] = attr.ib(metadata={"json": "options"}, factory=list)
+
+
+@dataclass
+class GlobalButtonsListReplay(SerializableAttrs):
+    type: str = attr.ib(default=None, metadata={"json": "type"})
+    title: str = attr.ib(default=None, metadata={"json": "title"})
+
+
+@dataclass
+class InteractiveMessage(SerializableAttrs):
+    type: str = attr.ib(default=None, metadata={"json": "type"})
+    content: ContentQuickReplay = attr.ib(default=None, metadata={"json": "content"})
+    options: List[InteractiveMessageOption] = attr.ib(metadata={"json": "options"}, factory=list)
+    title: str = attr.ib(default=None, metadata={"json": "title"})
+    body: str = attr.ib(default=None, metadata={"json": "body"})
+    msgid: str = attr.ib(default=None, metadata={"json": "msgid"})
+    global_buttons: List[GlobalButtonsListReplay] = attr.ib(metadata={"json": "globalButtons"}, factory=list)
+    items: List[ItemListReplay] = attr.ib(metadata={"json": "items"}, factory=list)
+
+    @property
+    def message(self)-> str:
+        msg = ""
+
+        if self.type == "quick_reply":
+            msg = f"{self.content.header}{self.content.text}"
+
+            for option in self.options:
+                msg = f"{msg}\n{self.options.index(option) + 1}. {option.title}"
+
+        elif self.type == "list":
+            msg = f"{self.title}{self.body}"
+
+            for item in self.items:
+                for option in item.options:
+                    msg = f"{msg}\n{option.postback_text}. {option.title}"
+
+        return msg
 
 @dataclass
 class ChatInfo(SerializableAttrs):
