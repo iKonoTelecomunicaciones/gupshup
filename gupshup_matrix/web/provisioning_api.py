@@ -231,7 +231,9 @@ class ProvisioningAPI:
             is_gupshup_template=True,
         )
 
-        return web.json_response(data={"detail": "Template has been sent"})
+        return web.json_response(
+            data={"detail": "Template has been sent", "event_id": msg_event_id}
+        )
 
     async def interactive_message(self, request: web.Request) -> web.Response:
         """

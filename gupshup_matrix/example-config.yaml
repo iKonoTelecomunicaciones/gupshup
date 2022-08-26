@@ -54,7 +54,7 @@ bridge:
     username_template: "gswa_{userid}"
     # Displayname template for remote users.
     # {displayname} is replaced with the phone number of the user (human-readable international format).
-    displayname_template: "{displayname} (WA)"
+    displayname_template: "{displayname} (GS)"
     # How the rooms will be named?
     # {phone}       - phone number (international format)
     # {username}    - nickname set by the WhatsApp user
