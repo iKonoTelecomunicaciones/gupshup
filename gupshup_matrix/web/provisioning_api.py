@@ -145,6 +145,10 @@ class ProvisioningAPI:
                 api_key=api_key,
                 phone_number=gs_app_phone,
             )
+            user.gs_app = gs_app_name
+            user.phone = gs_app_phone
+            await user.update()
+
         except Exception as e:
             return web.json_response(
                 data={"error": e},
