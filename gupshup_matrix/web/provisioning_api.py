@@ -57,7 +57,7 @@ class ProvisioningAPI:
 
     async def _resolve_identifier(self, number: str) -> pu.Puppet:
         try:
-            number = normalize_number(number)
+            number = normalize_number(number).replace("+", "")
         except Exception as e:
             raise web.HTTPBadRequest(text=json.dumps({"error": str(e)}), headers=self._headers)
 
@@ -359,7 +359,7 @@ class ProvisioningAPI:
             sender=user,
             message=msg,
             event_id=msg_event_id,
-            additional_data=interactive_message,
+            additional_data=interactive_message.serialize(),
         )
 
         return web.json_response(data={"detail_1": interactive_message.message})
