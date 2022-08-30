@@ -62,9 +62,6 @@ class User(DBUser, BaseUser):
     async def is_logged_in(self) -> bool:
         return bool(self.phone)
 
-    async def needs_relay(self, portal: po.Portal) -> bool:
-        return not await self.is_logged_in() or portal.is_direct
-
     async def get_puppet(self) -> pu.Puppet | None:
         if not self.mxid:
             return None
