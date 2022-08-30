@@ -27,7 +27,7 @@ NOTE: This bridge is inspired by the mautrix bridges, so you can follow the docu
 
 Docker image: `bramenn/gupshup-matrix:latest`
 
-### Register a Gupsgup applcation on the bridge
+### Register a Gupsgup application on the bridge
 
 - Create a room without encryption
 - Then invite the bridge bot (you must have the user registered in the config section `bridge.permissions` as admin)
