@@ -109,7 +109,7 @@ bridge:
         #   $sender_mxid        - The Matrix ID of the sender (e.g. @exampleuser:example.com)
         #   $message            - The message content
         message_formats:
-            m.text: '$sender_displayname: $message'
+            m.text: '*$sender_displayname*: $message'
             m.notice: '$sender_displayname: $message'
             m.file: '$sender_displayname sent a file'
             m.image: '$sender_displayname sent an image'
