@@ -49,4 +49,4 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/gupshup-matrix:latest
+          tags: ikonoim/gupshup-matrix:latest
