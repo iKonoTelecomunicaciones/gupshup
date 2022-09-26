@@ -25,7 +25,7 @@ NOTE: This bridge is inspired by the mautrix bridges, so you can follow the docu
 [Bridge setup](https://docs.mau.fi/bridges/python/setup.html)
 (or [with Docker](https://docs.mau.fi/bridges/general/docker-setup.html))
 
-Docker image: `bramenn/gupshup-matrix:latest`
+Docker image: `ikonoim/gupshup-matrix:latest`
 
 ### Register a Gupsgup application on the bridge
 
