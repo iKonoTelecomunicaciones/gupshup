@@ -206,6 +206,17 @@ class Portal(DBPortal, BasePortal):
         self.by_mxid[self.mxid] = self
         return self.mxid
 
+    async def handle_matrix_leave(self, user: u.User) -> None:
+        if self.is_direct:
+            self.log.info(f"{user.mxid} left private chat portal with {self.chat_id}")
+            if f"{user.gs_app}-{user.phone}" == self.chat_id:
+                self.log.info(
+                    f"{user.mxid} was the recipient of this portal. Cleaning up and deleting..."
+                )
+                await self.cleanup_and_delete()
+        else:
+            self.log.debug(f"{user.mxid} left portal to {self.chat_id}")
+
     def _get_invite_content(self, double_puppet: p.Puppet | None) -> dict[str, Any]:
         invite_content = {}
         if double_puppet:
