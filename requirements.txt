@@ -1,8 +1,8 @@
 aiohttp>=3,<4
-ruamel.yaml==0.16.10
-commonmark==0.9.1
-python-magic==0.4.18
-mautrix>=0.15.7,<0.17.6
-asyncpg>=0.20,<0.26
+ruamel.yaml>=0.15.94,<0.18
+commonmark>=0.8,<0.10
+python-magic>=0.4,<0.5
+mautrix>=0.18.6,<0.19
+asyncpg>=0.20,<0.27
 phonenumbers==8.12.6
 Markdown==3.3.6

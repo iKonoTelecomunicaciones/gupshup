@@ -9,6 +9,9 @@ homeserver:
     # Whether or not to verify the SSL certificate of the homeserver.
     # Only applies if address starts with https://
     verify_ssl: true
+    # What software is the homeserver running?
+    # Standard Matrix homeservers like Synapse, Dendrite and Conduit should just use "standard" here.
+    software: standard
 
 # Application service host/registration related details
 # Changing these values requires regeneration of the registration.
