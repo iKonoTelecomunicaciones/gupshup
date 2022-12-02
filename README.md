@@ -31,7 +31,7 @@ Docker image: `ikonoim/gupshup-matrix:latest`
 
 - Create a room without encryption
 - Then invite the bridge bot (you must have the user registered in the config section `bridge.permissions` as admin)
-- Send the command `register-app <gs_app_name> <gs_app_phone> <api_key> <app_id>
+- Send the command `register-app <gs_app_name> <gs_app_phone> <api_key> <app_id>`
 - you can now start receiving incoming messages on the registered number
 
 
