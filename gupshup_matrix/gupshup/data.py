@@ -1,4 +1,5 @@
 from typing import List, NewType
+
 import attr
 from attr import dataclass
 from mautrix.types import SerializableAttrs, SerializableEnum
