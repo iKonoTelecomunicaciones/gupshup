@@ -28,7 +28,7 @@ COPY requirements.txt /opt/gupshup-matrix/requirements.txt
 COPY requirements-dev.txt /opt/gupshup-matrix/requirements-dev.txt
 WORKDIR /opt/gupshup-matrix
 RUN apk add --virtual .build-deps python3-dev libffi-dev build-base \
- && pip3 install -r requirements.txt -r requirements-dev.txt \
+ && pip3 install -r requirements.txt \
  && apk del .build-deps
 
 COPY . /opt/gupshup-matrix

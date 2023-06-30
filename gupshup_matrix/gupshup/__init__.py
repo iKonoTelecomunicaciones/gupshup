@@ -6,5 +6,7 @@ from .data import (
     GupshupMessageStatus,
     GupshupStatusEvent,
     GupshupUserID,
+    InteractiveMessage,
+    InteractiveMessageTypes,
 )
 from .webhook import GupshupHandler

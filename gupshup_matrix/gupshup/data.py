@@ -1,8 +1,7 @@
-from typing import Dict, List, NewType, Optional
-
+from typing import List, NewType
 import attr
 from attr import dataclass
-from mautrix.types import SerializableAttrs
+from mautrix.types import SerializableAttrs, SerializableEnum
 
 GupshupMessageID = NewType("GupshupMessageID", str)
 GupshupUserID = NewType("GupshupUserID", str)
@@ -146,6 +145,11 @@ class InteractiveMessage(SerializableAttrs):
                     msg = f"{msg}\n{option.postback_text}. {option.title}"
 
         return msg
+
+
+class InteractiveMessageTypes(SerializableEnum):
+    QUICK_REPLY = "m.interactive.quick_reply"
+    LIST_REPLY = "m.interactive.list_reply"
 
 
 @dataclass
