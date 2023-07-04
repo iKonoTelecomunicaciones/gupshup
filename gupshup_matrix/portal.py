@@ -450,13 +450,15 @@ class Portal(DBPortal, BasePortal):
                 InteractiveMessageTypes.QUICK_REPLY,
                 InteractiveMessageTypes.LIST_REPLY,
             ):
-                interactive_message = message.get("interactive_message", {}).__dict__
-                event_content: InteractiveMessage = InteractiveMessage(**interactive_message)
+                interactive_message = message.get("interactive_message", {}).serialize()
+                event_content: InteractiveMessage = InteractiveMessage.from_dict(
+                    data=interactive_message
+                )
                 await self.handle_interactive_message(
                     sender=sender, interactive_message=event_content, event_id=event_id
                 )
                 return
-        except ValueError as e:
+        except ValueError:
             pass
 
         orig_sender = sender
