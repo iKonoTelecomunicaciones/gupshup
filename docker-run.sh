@@ -32,5 +32,10 @@ if [ ! -f /data/registration.yaml ]; then
 	exit
 fi
 
+if [ "$1" = "dev" ]; then
+	pip install --ignore-installed -r requirements-dev.txt
+	watchmedo auto-restart -R -p="*.py" -d="." /opt/gupshup-matrix/docker-run.sh
+fi
+
 fixperms
 exec su-exec $UID:$GID python3 -m gupshup_matrix -c /data/config.yaml
