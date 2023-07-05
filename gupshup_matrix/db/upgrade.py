@@ -57,3 +57,8 @@ async def upgrade_v1(conn: Connection) -> None:
     await conn.execute(
         "ALTER TABLE message ADD CONSTRAINT FK_gs_app FOREIGN KEY (gs_app) references gupshup_application (name)"
     )
+
+
+@upgrade_table.register(description="Add field encrypted to portal table")
+async def upgrade_v2(conn: Connection) -> None:
+    await conn.execute("ALTER TABLE portal ADD COLUMN encrypted BOOLEAN DEFAULT false")
