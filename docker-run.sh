@@ -34,7 +34,7 @@ fi
 
 if [ "$1" = "dev" ]; then
 	pip install --ignore-installed -r requirements-dev.txt
-    watchmedo auto-restart -R -p="*.py" -d="." /opt/gupshup-matrix/docker-run.sh
+	watchmedo auto-restart -R -p="*.py" -d="." /opt/gupshup-matrix/docker-run.sh
 fi
 
 fixperms
