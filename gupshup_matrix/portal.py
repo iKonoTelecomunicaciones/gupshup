@@ -364,8 +364,7 @@ class Portal(DBPortal, BasePortal):
             if message.payload.type == "button_reply":
                 # Separamos el contenido que llega de gupshup y obtenemos el último elemento
                 # que contiene el número de la opción seleccionada
-                body_parts = message.payload.body.reply_message.split()
-                body = body_parts[-1]
+                body = message.payload.body.title.lower()
             elif message.payload.type == "list_reply":
                 body = message.payload.body.postback_text
 
