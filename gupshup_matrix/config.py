@@ -31,7 +31,6 @@ class Config(BaseBridgeConfig):
         copy("bridge.room_name_template")
         copy("bridge.private_chat_name_template")
         copy("bridge.command_prefix")
-        copy("bridge.google_maps_url")
 
         copy("bridge.periodic_reconnect.interval")
         copy("bridge.periodic_reconnect.resync")

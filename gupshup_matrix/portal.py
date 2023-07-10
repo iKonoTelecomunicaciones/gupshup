@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 from string import Template
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
 
@@ -12,13 +13,16 @@ from mautrix.types import (
     EventType,
     FileInfo,
     Format,
-    MediaMessageEventContent,
-    MessageEventContent,
     MessageType,
     PowerLevelStateEventContent,
     RoomID,
-    TextMessageEventContent,
     UserID,
+)
+from mautrix.types.event import (
+    LocationMessageEventContent,
+    MediaMessageEventContent,
+    MessageEventContent,
+    TextMessageEventContent,
 )
 
 from gupshup_matrix.formatter.from_matrix import matrix_to_whatsapp
@@ -46,7 +50,6 @@ class Portal(DBPortal, BasePortal):
     by_chat_id: Dict[RoomID, "Portal"] = {}
     by_chat_id: Dict[str, "Portal"] = {}
 
-    google_maps_url: str
     message_template: Template
     federate_rooms: bool
     invite_users: List[UserID]
@@ -336,7 +339,6 @@ class Portal(DBPortal, BasePortal):
                 mxid = await self.main_intent.send_sticker(room_id=self.mxid, url=mxc, info=info)
 
         elif message.payload.type == "contact":
-
             for contact in message.payload.body.contacts:
                 if contact:
                     message_data = ""
@@ -380,12 +382,15 @@ class Portal(DBPortal, BasePortal):
                 mxid = await self.main_intent.send_message(self.mxid, content)
 
         if message.payload.type == "location":
-            text = ""
-            location = self.google_maps_url.replace(
-                "{latitude}", message.payload.body.latitude
-            ).replace("{longitude}", message.payload.body.longitude)
-            text += location
-            mxid = await self.send_text_message(text)
+            latitude = message.payload.body.latitude
+            longitude = message.payload.body.longitude
+
+            location_message = LocationMessageEventContent(
+                msgtype=MessageType.LOCATION,
+                body=f"User Location geo:{longitude},{latitude} at {datetime.utcnow()}",
+                geo_uri=f"geo:{longitude},{latitude}",
+            )
+            await self.main_intent.send_message(room_id=self.mxid, content=location_message)
 
         if not mxid:
             mxid = await self.main_intent.send_notice(self.mxid, "Contenido no aceptado")
@@ -450,7 +455,6 @@ class Portal(DBPortal, BasePortal):
             return
 
         if message.msgtype in (MessageType.TEXT, MessageType.NOTICE):
-
             if message.format == Format.HTML:
                 text = await matrix_to_whatsapp(message.formatted_body)
             else:
