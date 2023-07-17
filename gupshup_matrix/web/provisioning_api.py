@@ -13,12 +13,12 @@ from .. import portal as po
 from .. import puppet as pu
 from .. import user as u
 from ..db.gupshup_application import GupshupApplication
-from ..gupshup.data import ChatInfo, GupshupMessageSender, InteractiveMessage
+from ..gupshup.data import ChatInfo, GupshupMessageSender
+from ..gupshup.interactive_message import InteractiveMessage
 from ..util import normalize_number
 
 
 class ProvisioningAPI:
-
     app: web.Application
 
     def __init__(self, shared_secret: str) -> None:

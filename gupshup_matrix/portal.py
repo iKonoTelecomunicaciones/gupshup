@@ -4,6 +4,7 @@ import asyncio
 from string import Template
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
 
+from markdown import markdown
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal
 from mautrix.errors import MatrixError, MUnknown
@@ -30,7 +31,14 @@ from .db import GupshupApplication as DBGupshupApplication
 from .db import Message as DBMessage
 from .db import Portal as DBPortal
 from .formatter import whatsapp_reply_to_matrix, whatsapp_to_matrix
-from .gupshup import GupshupClient, GupshupMessageEvent, GupshupMessageID, GupshupMessageStatus
+from .gupshup import (
+    GupshupClient,
+    GupshupMessageEvent,
+    GupshupMessageID,
+    GupshupMessageStatus,
+    InteractiveMessage,
+    InteractiveMessageTypes,
+)
 
 if TYPE_CHECKING:
     from .__main__ import GupshupBridge
@@ -336,7 +344,6 @@ class Portal(DBPortal, BasePortal):
                 mxid = await self.main_intent.send_sticker(room_id=self.mxid, url=mxc, info=info)
 
         elif message.payload.type == "contact":
-
             for contact in message.payload.body.contacts:
                 if contact:
                     message_data = ""
@@ -357,8 +364,7 @@ class Portal(DBPortal, BasePortal):
             if message.payload.type == "button_reply":
                 # Separamos el contenido que llega de gupshup y obtenemos el último elemento
                 # que contiene el número de la opción seleccionada
-                body_parts = message.payload.body.reply_message.split()
-                body = body_parts[-1]
+                body = message.payload.body.title.lower()
             elif message.payload.type == "list_reply":
                 body = message.payload.body.postback_text
 
@@ -438,6 +444,22 @@ class Portal(DBPortal, BasePortal):
         is_gupshup_template: bool = False,
         additional_data: Optional[dict] = None,
     ) -> None:
+        try:
+            if InteractiveMessageTypes(message.msgtype) in (
+                InteractiveMessageTypes.QUICK_REPLY,
+                InteractiveMessageTypes.LIST_REPLY,
+            ):
+                interactive_message = message.get("interactive_message", {}).serialize()
+                event_content: InteractiveMessage = InteractiveMessage.from_dict(
+                    data=interactive_message
+                )
+                await self.handle_interactive_message(
+                    sender=sender, interactive_message=event_content, event_id=event_id
+                )
+                return
+        except ValueError:
+            pass
+
         orig_sender = sender
         sender, is_relay = await self.get_relay_sender(sender, f"message {event_id}")
         if is_relay:
@@ -450,7 +472,6 @@ class Portal(DBPortal, BasePortal):
             return
 
         if message.msgtype in (MessageType.TEXT, MessageType.NOTICE):
-
             if message.format == Format.HTML:
                 text = await matrix_to_whatsapp(message.formatted_body)
             else:
@@ -546,3 +567,31 @@ class Portal(DBPortal, BasePortal):
             return portal
 
         return None
+
+    async def handle_interactive_message(
+        self, sender: u.User, interactive_message: InteractiveMessage, event_id: EventID
+    ) -> None:
+        msg = TextMessageEventContent(
+            body=interactive_message.message,
+            msgtype=MessageType.TEXT,
+            formatted_body=markdown(interactive_message.message.replace("\n", "<br>")),
+            format=Format.HTML,
+        )
+        msg.trim_reply_fallback()
+
+        # Send message in matrix format
+        await self.az.intent.send_message(self.mxid, msg)
+
+        # Send message in whatsapp format
+        resp = await self.gsc.send_message(
+            data=await self.main_data_gs,
+            additional_data=interactive_message.serialize(),
+        )
+
+        await DBMessage(
+            mxid=event_id,
+            mx_room=self.mxid,
+            sender=self.gs_source,
+            gsid=GupshupMessageID(resp.get("messageId")),
+            gs_app=self.gs_app,
+        ).insert()
