@@ -37,7 +37,6 @@ from .gupshup import (
     GupshupMessageID,
     GupshupMessageStatus,
     InteractiveMessage,
-    InteractiveMessageTypes,
 )
 
 if TYPE_CHECKING:
@@ -444,21 +443,15 @@ class Portal(DBPortal, BasePortal):
         is_gupshup_template: bool = False,
         additional_data: Optional[dict] = None,
     ) -> None:
-        try:
-            if InteractiveMessageTypes(message.msgtype) in (
-                InteractiveMessageTypes.QUICK_REPLY,
-                InteractiveMessageTypes.LIST_REPLY,
-            ):
-                interactive_message = message.get("interactive_message", {}).serialize()
-                event_content: InteractiveMessage = InteractiveMessage.from_dict(
-                    data=interactive_message
-                )
-                await self.handle_interactive_message(
-                    sender=sender, interactive_message=event_content, event_id=event_id
-                )
-                return
-        except ValueError:
-            pass
+        if message.msgtype == "m.interactive_message":
+            interactive_message = message.get("interactive_message", {}).serialize()
+            event_content: InteractiveMessage = InteractiveMessage.from_dict(
+                data=interactive_message
+            )
+            await self.handle_interactive_message(
+                sender=sender, interactive_message=event_content, event_id=event_id
+            )
+            return
 
         orig_sender = sender
         sender, is_relay = await self.get_relay_sender(sender, f"message {event_id}")

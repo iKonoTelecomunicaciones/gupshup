@@ -1,12 +1,7 @@
 from typing import Dict, List
 
 from attr import dataclass, ib
-from mautrix.types import SerializableAttrs, SerializableEnum
-
-
-class InteractiveMessageTypes(SerializableEnum):
-    QUICK_REPLY = "m.interactive.quick_reply"
-    LIST_REPLY = "m.interactive.list_reply"
+from mautrix.types import SerializableAttrs
 
 
 @dataclass
