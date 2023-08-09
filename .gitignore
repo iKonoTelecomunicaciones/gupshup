@@ -11,3 +11,5 @@ registration.yaml
 *.log.*
 
 *.db
+
+/.vscode

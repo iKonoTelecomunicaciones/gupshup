@@ -162,6 +162,18 @@ gupshup:
         1011:
             reason_en: "Invalid Media Size"
             reason_es: "Tamaño de multimedia inválido"
+        1013:
+            reason_en: "Number does not exists on WhatsApp"
+            reason_es: "El número no existe en WhatsApp"
+        1014:
+            reason_en: "The URL content is not available"
+            reason_es: "El contenido de la URL no se encuentra disponible"
+
+        # New error codes
+        470:
+            reason_en: "Message failed to send because more than 24 hours have passed since the customer last replied to this number"
+            reason_es: "Mensaje no entregado, por favor intente nuevamente. Verifique que no hayan pasado más de 24 horas desde el último mensaje."
+
 
 # Python logging configuration.
 #
