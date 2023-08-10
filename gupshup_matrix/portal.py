@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
 from markdown import markdown
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal
-from mautrix.errors import MatrixError, MUnknown
+from mautrix.errors import MUnknown
 from mautrix.types import (
     EventID,
     EventType,
@@ -83,7 +83,7 @@ class Portal(DBPortal, BasePortal):
         self._create_room_lock = asyncio.Lock()
         self._send_lock = asyncio.Lock()
         self.log = self.log.getChild(self.chat_id or self.phone)
-        self._main_intent = None
+        self._main_intent: IntentAPI = None
         self._relay_user = None
         self.error_codes = self.config["gupshup.error_codes"]
         self.homeserver_address = self.config["homeserver.public_address"]
@@ -151,8 +151,6 @@ class Portal(DBPortal, BasePortal):
 
     async def _create_matrix_room(self, source: u.User, info: ChatInfo) -> RoomID:
         self.log.debug("Creating Matrix room")
-        if not self.config["bridge.federate_rooms"]:
-            creation_content["m.federate"] = False
         power_levels = await self._get_power_levels(is_initial=True)
         initial_state = [
             {
@@ -172,45 +170,37 @@ class Portal(DBPortal, BasePortal):
             },
         ]
 
-        invites = [source.mxid]
+        invites = []
         creation_content = {}
         if not self.config["bridge.federate_rooms"]:
             creation_content["m.federate"] = False
+
+        room_name_template = self.config["bridge.room_name_template"].format(
+            username=info.sender.name, phone=self.phone
+        )
         self.mxid = await self.main_intent.create_room(
-            name=self.config["bridge.room_name_template"].format(
-                username=info.sender.name, phone=self.phone
-            ),
+            name=room_name_template,
             is_direct=self.is_direct,
             initial_state=initial_state,
             invitees=invites,
             topic="WhatsApp private chat",
             creation_content=creation_content,
-            # Make sure the power level event in initial_state is allowed
-            # even if the server sends a default power level event before it.
-            # TODO remove this if the spec is changed to require servers to
-            #      use the power level event in initial_state
-            power_level_override={"users": {self.main_intent.mxid: 9001}},
         )
+
         if not self.mxid:
             raise Exception("Failed to create room: no mxid returned")
 
-        self.log.debug(self.phone)
-        puppet: p.Puppet = await p.Puppet.get_by_phone(self.phone)
-        puppet.name = info.sender.name
-        await self.main_intent.invite_user(
-            self.mxid, puppet.mxid, extra_content=self._get_invite_content(puppet)
-        )
-        if puppet:
-            try:
-                await puppet.intent.join_room_by_id(self.mxid)
-            except MatrixError:
-                self.log.debug(
-                    "Failed to join custom puppet into newly created portal", exc_info=True
-                )
         await self.update()
-        await puppet.update_info(info)
         self.log.debug(f"Matrix room created: {self.mxid}")
         self.by_mxid[self.mxid] = self
+
+        puppet: p.Puppet = await p.Puppet.get_by_phone(self.phone)
+        await puppet.update_info(info)
+
+        await self.main_intent.invite_user(
+            self.mxid, source.mxid, extra_content=self._get_invite_content(puppet)
+        )
+
         return self.mxid
 
     async def handle_matrix_leave(self, user: u.User) -> None:
