@@ -55,6 +55,8 @@ class Config(BaseBridgeConfig):
         copy("gupshup.base_url")
         copy("gupshup.webhook_path")
 
+        copy_dict("quick_reply")
+
     def _get_permissions(self, key: str) -> Permissions:
         level = self["bridge.permissions"].get(key, "")
         admin = level == "admin"

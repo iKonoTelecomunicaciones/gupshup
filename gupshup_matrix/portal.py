@@ -351,9 +351,12 @@ class Portal(DBPortal, BasePortal):
 
         elif message.payload.type in ["button_reply", "list_reply"]:
             if message.payload.type == "button_reply":
-                # Separamos el contenido que llega de gupshup y obtenemos el último elemento
-                # que contiene el número de la opción seleccionada
-                body = message.payload.body.title.lower()
+                if self.config["quick_reply.send_option_index"]:
+                    # Separamos el contenido que llega de gupshup y obtenemos el último elemento
+                    # que contiene el número de la opción seleccionada
+                    body = message.payload.body.reply_message.split()[-1]
+                else:
+                    body = message.payload.body.title.lower()
             elif message.payload.type == "list_reply":
                 body = message.payload.body.postback_text
 
