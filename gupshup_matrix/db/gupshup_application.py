@@ -49,6 +49,12 @@ class GupshupApplication:
         await cls.db.execute(q, name, admin_user, app_id, api_key, phone_number)
 
     @classmethod
+    async def update_by_admin_user(cls, mxid: str, values: dict) -> None:
+        """Update the name and  api_key of gupshup application using admin user."""
+        q = "UPDATE gupshup_application SET name=$2, api_key=$3 WHERE admin_user=$1"
+        await cls.db.execute(q, mxid, *values)
+
+    @classmethod
     async def get_by_name(cls, name: str) -> Optional["GupshupApplication"]:
         q = "SELECT name, admin_user, app_id, api_key, phone_number FROM gupshup_application WHERE name=$1"
         row = await cls.db.fetchrow(q, name)
