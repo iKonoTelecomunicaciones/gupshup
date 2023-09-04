@@ -443,7 +443,6 @@ class ProvisioningAPI:
             name if name else gupshup_app.name,
             api_key if api_key else gupshup_app.api_key,
         )
-        logger.critical(data_to_update)
 
         logger.debug(f"Update gupshup_app {gupshup_app.app_id} with user {user.mxid}")
         await gupshup_app.update_by_admin_user(mxid=user.mxid, values=data_to_update)
