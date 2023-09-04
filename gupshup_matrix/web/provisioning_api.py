@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Awaitable
 
 from aiohttp import web
@@ -17,6 +18,8 @@ from ..gupshup.data import ChatInfo, GupshupMessageSender
 from ..gupshup.interactive_message import InteractiveMessage
 from ..util import normalize_number
 
+logger = logging.getLogger()
+
 
 class ProvisioningAPI:
     app: web.Application
@@ -25,9 +28,11 @@ class ProvisioningAPI:
         self.app = web.Application()
         self.shared_secret = shared_secret
         self.app.router.add_options("/v1/register_app", self.login_options)
+        self.app.router.add_options("/v1/update_app", self.login_options)
         self.app.router.add_options("/v1/template", self.login_options)
         self.app.router.add_options("/v1/interactive_message", self.login_options)
         self.app.router.add_post("/v1/register_app", self.register_app)
+        self.app.router.add_patch("/v1/update_app", self.update_app)
         self.app.router.add_post("/v1/pm/{number}", self.start_pm)
         self.app.router.add_post("/v1/template", self.template)
         self.app.router.add_post("/v1/interactive_message", self.interactive_message)
@@ -37,7 +42,7 @@ class ProvisioningAPI:
         return {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Headers": "Authorization, Content-Type",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS, PATCH",
         }
 
     @property
@@ -375,3 +380,79 @@ class ProvisioningAPI:
         else:
             data = None
         return user, data
+
+    async def update_app(self, request: web.Request) -> dict:
+        """
+        Update the gupshup application
+
+        Parameters
+        ----------
+        request: web.Request
+            The request that contains the data of the app and the user.
+
+        Returns
+        -------
+        JSON
+            The response of the request with a success message or an error message
+        """
+
+        # Obtain the data from the request
+        logger.debug("Updating gupshup_app")
+        user, data = await self._get_user(request)
+
+        if not data:
+            return web.HTTPBadRequest(
+                text=json.dumps(
+                    {
+                        "detail": {
+                            "data": None,
+                            "message": f"The request does not have data",
+                        }
+                    }
+                ),
+                headers=self._headers,
+            )
+
+        # Separate the data from the request
+        name = data.get("app_name", None)
+        api_key = data.get("api_key", None)
+
+        # Check if the gupshup_app is registered
+        gupshup_app: GupshupApplication = await GupshupApplication.get_by_admin_user(
+            admin_user=user.mxid
+        )
+
+        if not gupshup_app:
+            return web.HTTPUnprocessableEntity(
+                text=json.dumps(
+                    {
+                        "detail": {
+                            "data": None,
+                            "message": f"""The meta application with user {user.mxid}
+                                        is not registered""",
+                        }
+                    }
+                ),
+                headers=self._headers,
+            )
+
+        # Update the gupshup_app with the send values
+        data_to_update = (
+            name if name else gupshup_app.name,
+            api_key if api_key else gupshup_app.api_key,
+        )
+
+        logger.debug(f"Update gupshup_app {gupshup_app.app_id} with user {user.mxid}")
+        await gupshup_app.update_by_admin_user(mxid=user.mxid, values=data_to_update)
+
+        return web.HTTPOk(
+            text=json.dumps(
+                {
+                    "detail": {
+                        "data": None,
+                        "message": f"The gupshup_app {gupshup_app.app_id} has been updated",
+                    }
+                }
+            ),
+            headers=self._headers,
+        )
