@@ -31,11 +31,11 @@ class ProvisioningAPI:
         self.app.router.add_options("/v1/update_app", self.login_options)
         self.app.router.add_options("/v1/template", self.login_options)
         self.app.router.add_options("/v1/interactive_message", self.login_options)
+        self.app.router.add_post("/v1/register_app", self.register_app)
         self.app.router.add_patch("/v1/update_app", self.update_app)
         self.app.router.add_post("/v1/pm/{number}", self.start_pm)
         self.app.router.add_post("/v1/template", self.template)
         self.app.router.add_post("/v1/interactive_message", self.interactive_message)
-        self.app.router.add_post("/v1/register_app", self.register_app)
 
     @property
     def _acao_headers(self) -> dict[str, str]:
@@ -94,8 +94,6 @@ class ProvisioningAPI:
         return u.User.get_by_mxid(UserID(user_id))
 
     async def register_app(self, request: web.Request) -> web.Response:
-        logger.error(f"Shared secret: {self.shared_secret}")
-
         user, data = await self._get_user(request)
 
         try:
