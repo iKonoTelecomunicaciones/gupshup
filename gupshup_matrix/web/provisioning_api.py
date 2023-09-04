@@ -383,7 +383,7 @@ class ProvisioningAPI:
 
     async def update_app(self, request: web.Request) -> dict:
         """
-        Update the gupsup application
+        Update the gupshup application
 
         Parameters
         ----------
