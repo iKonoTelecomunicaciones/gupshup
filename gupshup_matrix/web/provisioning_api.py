@@ -414,8 +414,20 @@ class ProvisioningAPI:
             )
 
         # Separate the data from the request
-        name = data.get("app_name", None)
         api_key = data.get("api_key", None)
+
+        if not api_key:
+            return web.HTTPBadRequest(
+                text=json.dumps(
+                    {
+                        "detail": {
+                            "data": None,
+                            "message": "The request does not have api_key",
+                        }
+                    }
+                ),
+                headers=self._headers,
+            )
 
         # Check if the gupshup_app is registered
         gupshup_app: GupshupApplication = await GupshupApplication.get_by_admin_user(
@@ -437,13 +449,8 @@ class ProvisioningAPI:
             )
 
         # Update the gupshup_app with the send values
-        data_to_update = (
-            name if name else gupshup_app.name,
-            api_key if api_key else gupshup_app.api_key,
-        )
-
         logger.debug(f"Update gupshup_app {gupshup_app.app_id} with user {user.mxid}")
-        await gupshup_app.update_by_admin_user(mxid=user.mxid, values=data_to_update)
+        await gupshup_app.update_by_admin_user(mxid=user.mxid, api_key=api_key)
 
         return web.HTTPOk(
             text=json.dumps(

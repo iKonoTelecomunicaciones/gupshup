@@ -49,11 +49,10 @@ class GupshupApplication:
         await cls.db.execute(q, name, admin_user, app_id, api_key, phone_number)
 
     @classmethod
-    async def update_by_admin_user(cls, mxid: str, values: list) -> None:
-        """Update the name and  api_key of gupshup application using admin user,
-        values is a list having the name and the api_key, in that order"""
-        q = "UPDATE gupshup_application SET name=$2, api_key=$3 WHERE admin_user=$1"
-        await cls.db.execute(q, mxid, *values)
+    async def update_by_admin_user(cls, mxid: str, api_key: str) -> None:
+        """Update the api_key of gupshup application using admin user"""
+        q = "UPDATE gupshup_application SET api_key=$2 WHERE admin_user=$1"
+        await cls.db.execute(q, mxid, api_key)
 
     @classmethod
     async def get_by_name(cls, name: str) -> Optional["GupshupApplication"]:
