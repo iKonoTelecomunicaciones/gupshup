@@ -85,10 +85,10 @@ jobs:
 
           echo "** Download updated docker image **"
           # Download updated docker image to testing server
-          ssh -tt ${{ secrets.TESTING }} "docker pull ikonoim/gupshup-matrix:$TAG_TESTING"
+          ssh -tt ${{ secrets.TESTING }} "docker pull ikonoim/gupshup-matrix:${TAG_TESTING}"
 
           echo "** Update gupshup image in registered domains **"
-          for domain in  $DOMAINS; do
+          for domain in  ${DOMAINS}; do
             echo " >> Setting service variables"
             stack_name=$(echo ${domain} | tr -d '.')
             service=$(echo ${domain} | cut -d '.' -f1)
