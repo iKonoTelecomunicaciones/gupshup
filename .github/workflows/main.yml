@@ -40,8 +40,8 @@ jobs:
         name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
-          username: ${{env.DOCKER_USERNAME}}
-          password: ${{env.DOCKER_PASSWORD}}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
       -
         name: Build and push
         uses: docker/build-push-action@v4
@@ -74,18 +74,18 @@ jobs:
           eval $(ssh-agent -s)
 
           # Add the SSH key stored in SSH_PRIVATE_KEY variable to the agent store
-          ssh-add <(echo "$SSH_PRIVATE_KEY")
+          ssh-add <(echo "${{ secrets.SSH_PRIVATE_KEY }}")
 
           # Create the SSH config directory
           mkdir -vp ~/.ssh
 
           # Disable StrictHostKeyChecking ask in SSH config
           [[ -e ~/.ssh ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
-          ssh -tt $TESTING "echo '** Connected **'"
+          ssh -tt ${{ secrets.TESTING }} "echo '** Connected **'"
 
           echo "** Download updated docker image **"
           # Download updated docker image to testing server
-          ssh -tt $TESTING "docker pull ikonoim/gupshup-matrix:$TAG_TESTING"
+          ssh -tt ${{ secrets.TESTING }} "docker pull ikonoim/gupshup-matrix:$TAG_TESTING"
 
           echo "** Update gupshup image in registered domains **"
           for domain in  $DOMAINS; do
@@ -95,7 +95,7 @@ jobs:
             gupshup_service="${stack_name}_${service}-gupshup-as"
 
             echo " >> Remove the service if exists"
-            ssh -tt $TESTING " \
+            ssh -tt ${{ secrets.TESTING }} " \
               if docker service ps ${gupshup_service}; then \
                 docker service rm ${gupshup_service}; \
               else \
@@ -105,7 +105,7 @@ jobs:
 
             echo " >> Deploy the service"
             docker_compose_file="/mnt/shared/matrix/${domain}/docker-compose.yml"
-            ssh -tt $TESTING " \
+            ssh -tt ${{ secrets.TESTING }} " \
               docker-compose -f ${docker_compose_file} config | \
                 docker stack deploy -c - ${stack_name};
             "
