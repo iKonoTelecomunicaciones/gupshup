@@ -1,3 +1,4 @@
+
 name: Python lint and CI/CD
 
 on: [push]
@@ -6,8 +7,8 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - uses: actions/setup-python@v2
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v4
       with:
         python-version: "3.10"
     - uses: isort/isort-action@master
@@ -29,7 +30,6 @@ jobs:
     if: "github.ref_name == 'master'"
     runs-on: ubuntu-latest
     needs: lint
-    environment: deploy
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -44,9 +44,69 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
       -
         name: Build and push
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v4
         with:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ikonoim/gupshup-matrix:latest
+          tags: ikonoim/gupshup-matrix:testing
+
+  deploy-testing:
+    if: "github.ref_name == 'master'"
+    runs-on: ubuntu-latest
+    needs: docker
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Connect to server and update docker image
+        run: |-
+          echo "** Connecting to testing server **"
+
+          # Update the apt package index
+          sudo apt-get update -qq
+
+          # If ssh-agent does not exist, install openssh-client
+          which ssh-agent || ( sudo apt-get install openssh-client )
+
+          # Start the ssh-agent in the background
+          eval $(ssh-agent -s)
+
+          # Add the SSH key stored in SSH_PRIVATE_KEY variable to the agent store
+          ssh-add <(echo "${{secrets.SSH_PRIVATE_KEY}}")
+
+          # Create the SSH config directory
+          mkdir -vp ~/.ssh
+
+          # Disable StrictHostKeyChecking ask in SSH config
+          [[ -e ~/.ssh ]] && echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+          ssh -tt ${{secrets.TESTING}} "echo '** Connected **'"
+
+          echo "** Download updated docker image **"
+          # Download updated docker image to testing server
+          ssh -tt ${{secrets.TESTING}} "docker pull ikonoim/gupshup-matrix:${{TAG_TESTING}}"
+
+          echo "** Update gupshup image in registered domains **"
+          for domain in  ${{DOMAINS}}; do
+            echo " >> Setting service variables"
+            stack_name=$(echo ${domain} | tr -d '.')
+            service=$(echo ${domain} | cut -d '.' -f1)
+            gupshup_service="${stack_name}_${service}-gupshup-as"
+
+            echo " >> Remove the service if exists"
+            ssh -tt ${{ secrets.TESTING }} " \
+              if docker service ps ${gupshup_service}; then \
+                docker service rm ${gupshup_service}; \
+              else \
+                echo 'The service ${gupshup_service} is not exists'; \
+              fi;
+            "
+
+            echo " >> Deploy the service"
+            docker_compose_file="/mnt/shared/matrix/${domain}/docker-compose.yml"
+            ssh -tt ${{ secrets.TESTING }} " \
+              docker-compose -f ${docker_compose_file} config | \
+                docker stack deploy -c - ${stack_name};
+            "
+          done
