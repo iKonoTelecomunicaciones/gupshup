@@ -92,7 +92,7 @@ jobs:
             echo " >> Setting service variables"
             stack_name=$(echo ${domain} | tr -d '.')
             service=$(echo ${domain} | cut -d '.' -f1)
-            gupshup_service="${stack_name}_${service}-gupshup-as"
+            gupshup_service="${stack_name}_${service}-gupshup"
 
             echo " >> Remove the service if exists"
             ssh -tt ${{ secrets.TESTING }} " \
