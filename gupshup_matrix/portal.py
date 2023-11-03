@@ -450,9 +450,17 @@ class Portal(DBPortal, BasePortal):
         sender, is_relay = await self.get_relay_sender(sender, f"message {event_id}")
         if is_relay:
             await self.apply_relay_message_format(orig_sender, message)
-
+        self.log.critical(f"message: {message}")
+        self.log.critical(f"event_id: {event_id}")
+        self.log.critical(f"message.get_reply_to(): {message.get_reply_to()}")
         if message.get_reply_to():
-            await DBMessage.get_by_mxid(message.get_reply_to(), self.mxid)
+            reply_message = await DBMessage.get_by_mxid(message.get_reply_to(), self.mxid)
+            if reply_message:
+                additional_data = {
+                    "context": {
+                        "msgId": reply_message.gsid,
+                    }
+                }
 
         if message.msgtype == MessageType.NOTICE and not self.config["bridge.bridge_notices"]:
             return
