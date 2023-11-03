@@ -3,6 +3,9 @@ from __future__ import annotations
 import asyncio
 from string import Template
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
+from aiohttp import ClientConnectorError
+from datetime import datetime
+
 
 from markdown import markdown
 from mautrix.appservice import AppService, IntentAPI
@@ -20,6 +23,7 @@ from mautrix.types import (
     RoomID,
     TextMessageEventContent,
     UserID,
+    ReactionEventContent,
 )
 
 from gupshup_matrix.formatter.from_matrix import matrix_to_whatsapp
@@ -29,6 +33,7 @@ from . import puppet as p
 from . import user as u
 from .db import GupshupApplication as DBGupshupApplication
 from .db import Message as DBMessage
+from .db import Reaction as DBReaction
 from .db import Portal as DBPortal
 from .formatter import whatsapp_reply_to_matrix, whatsapp_to_matrix
 from .gupshup import (
@@ -288,7 +293,7 @@ class Portal(DBPortal, BasePortal):
 
         mxid = None
         msgtype = MessageType.TEXT
-
+        self.log.critical(f"Message: {message}")
         if message.payload.body.url:
             resp = await self.az.http_session.get(message.payload.body.url)
             data = await resp.read()
@@ -580,4 +585,71 @@ class Portal(DBPortal, BasePortal):
             sender=self.gs_source,
             gsid=GupshupMessageID(resp.get("messageId")),
             gs_app=self.gs_app,
+        ).insert()
+
+    async def handle_matrix_reaction(
+        self,
+        user: u.User,
+        message_mxid: str,
+        event_id: EventID,
+        room_id: RoomID,
+        content: ReactionEventContent,
+    ):
+        """
+        Send a reaction to whatsapp
+
+        Parameters
+        ----------
+        user: User
+            The user who sent the reaction
+        message_mxid: str
+            The message ID of the reaction event
+        event_id: EventID
+            The event ID of the reaction event
+        room_id: RoomID
+            The room ID of the room where the reaction was sent
+        content: Dict
+            The content of the reaction event
+        """
+        message: DBMessage = await DBMessage.get_by_mxid(message_mxid, room_id)
+
+        if not message:
+            await self.main_intent.send_notice(f"We couldn't find the message to react to")
+            return
+
+        reaction_value = content.relates_to.key
+        message_with_reaction = await DBReaction.get_by_gs_message_id(message.gsid, user.mxid)
+        data = await self.main_data_gs
+        self.log.critical(f"reaction_value {reaction_value}")
+        if message_with_reaction:
+            await DBReaction.delete_by_event_mxid(
+                message_with_reaction.event_mxid, self.mxid, user.mxid
+            )
+            # await self.az.intent.redact(self.mxid, message_with_reaction.event_mxid)
+
+        try:
+            await self.gsc.send_reaction(
+                message_id=message.gsid,
+                emoji=reaction_value,
+                type="reaction",
+                data=data,
+            )
+        except ClientConnectorError as e:
+            self.log.error(e)
+            await self.main_intent.send_notice(f"Error sending reaction: {e}")
+            return
+
+        except Exception as e:
+            self.log.error(f"Error sending reaction: {e}")
+            self.log.exception(f"Error sending reaction: {e}")
+            await self.main_intent.send_notice("Error sending reaction")
+            return
+
+        await DBReaction(
+            event_mxid=event_id,
+            room_id=self.mxid,
+            sender=user.mxid,
+            gs_message_id=message.gsid,
+            reaction=reaction_value,
+            created_at=datetime.now(),
         ).insert()

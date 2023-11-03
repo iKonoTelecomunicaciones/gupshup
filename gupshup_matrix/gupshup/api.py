@@ -7,7 +7,6 @@ from aiohttp import ClientConnectorError, ClientSession
 from mautrix.types import MessageType
 
 from ..config import Config
-from .data import GupshupUserID
 
 
 class GupshupClient:
@@ -16,6 +15,7 @@ class GupshupClient:
 
     def __init__(self, config: Config, loop: asyncio.AbstractEventLoop) -> None:
         self.base_url = config["gupshup.base_url"]
+        self.reaction_url = config["gupshup.reaction_url"]
         self.app_name = config["gupshup.app_name"]
         self.sender = config["gupshup.sender"]
         self.http = ClientSession(loop=loop)
@@ -29,7 +29,6 @@ class GupshupClient:
         is_gupshup_template: bool = False,
         additional_data: Optional[dict] = None,
     ) -> Dict[str, str]:
-
         headers = data.get("headers")
         data.pop("headers")
 
@@ -59,5 +58,27 @@ class GupshupClient:
         except ClientConnectorError as e:
             self.log.error(e)
 
+        response_data = json.loads(await resp.text())
+        return response_data
+
+    async def send_reaction(self, message_id: str, emoji: str, type: str, data: dict):
+        """
+        Send a reaction to whatsapp
+
+        Parameters
+        ----------
+        message_id: str
+            The message ID of the reaction event
+        emoji: str
+            The emoji that was reacted with
+        type: str
+            The type of the reaction event
+        """
+        headers = data.get("headers")
+        data.pop("headers")
+        data["message"] = json.dumps({"msgId": message_id, "type": type, "emoji": "🫡"})
+
+        self.log.critical(f"Sending reaction {data}")
+        resp = await self.http.post(self.reaction_url, data=data, headers=headers)
         response_data = json.loads(await resp.text())
         return response_data

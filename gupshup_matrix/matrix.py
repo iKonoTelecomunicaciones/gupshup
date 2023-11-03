@@ -1,9 +1,18 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict
 
 from mautrix.bridge import BaseMatrixHandler, RejectMatrixInvite
-from mautrix.types import Event, EventID, EventType, ReactionEvent, RedactionEvent, RoomID, UserID
+from mautrix.types import (
+    Event,
+    EventID,
+    EventType,
+    ReactionEvent,
+    RedactionEvent,
+    RoomID,
+    UserID,
+    ReactionEventContent,
+)
 
 from . import portal as po
 from . import user as u
@@ -33,14 +42,13 @@ class MatrixHandler(BaseMatrixHandler):
         await portal.handle_matrix_leave(user)
 
     async def handle_event(self, evt: Event) -> None:
+        self.log.critical(f"Received event {evt}")
         if evt.type == EventType.ROOM_REDACTION:
             evt: RedactionEvent
             await self.handle_redaction(evt.room_id, evt.sender, evt.redacts, evt.event_id)
         elif evt.type == EventType.REACTION:
             evt: ReactionEvent
-            await self.handle_reaction(
-                evt.room_id, evt.sender, evt.event_id, evt.content, evt.timestamp
-            )
+            await self.handle_reaction(evt.room_id, evt.sender, evt.event_id, evt.content)
 
     async def handle_invite(
         self, room_id: RoomID, user_id: UserID, inviter: u.User, event_id: EventID
@@ -96,3 +104,45 @@ class MatrixHandler(BaseMatrixHandler):
 
     async def allow_bridging_message(self, user: u.User, portal: po.Portal) -> bool:
         return portal.has_relay or await user.is_logged_in()
+
+    async def handle_reaction(
+        self,
+        room_id: RoomID,
+        user_id: UserID,
+        event_id: EventID,
+        content: ReactionEventContent,
+    ) -> None:
+        """
+        Send a reaction to a user in a room.
+
+        Parameters
+        ----------
+        room_id: RoomID
+            The room ID of the room where the reaction was sent
+        user_id: UserID
+            The user ID of the user who sent the reaction
+        event_id: EventID
+            The event ID of the reaction event
+        content: ReactionEventContent
+            The content of the reaction event
+        """
+        self.log.debug(f"Received reaction event: {content}")
+        user: u.User = await u.User.get_by_mxid(user_id)
+        message_mxid = content.relates_to.event_id
+        if not user:
+            return
+
+        if not message_mxid:
+            return
+
+        portal: po.Portal = await po.Portal.get_by_mxid(room_id)
+        if not portal:
+            return
+        try:
+            self.log.critical(f"Trying to send a reaction {content.relates_to}")
+            self.log.critical(f"message_mxid {message_mxid}")
+            self.log.critical(f"event_id {event_id}")
+            await portal.handle_matrix_reaction(user, message_mxid, event_id, room_id, content)
+        except ValueError as error:
+            self.log.error(f"Error trying to send a reaction {error}")
+            return

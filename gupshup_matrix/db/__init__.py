@@ -6,10 +6,11 @@ from .portal import Portal
 from .puppet import Puppet
 from .upgrade import upgrade_table
 from .user import User
+from .reaction import Reaction
 
 
 def init(db: Database) -> None:
-    for table in (Puppet, Portal, User, Message, GupshupApplication):
+    for table in (Puppet, Portal, User, Message, GupshupApplication, Reaction):
         table.db = db
 
 
