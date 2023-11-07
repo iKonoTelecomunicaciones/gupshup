@@ -382,15 +382,30 @@ class Portal(DBPortal, BasePortal):
                 mxid = await self.main_intent.send_message(self.mxid, content)
 
         if message.payload.type == "location":
-            latitude = message.payload.body.latitude
-            longitude = message.payload.body.longitude
+            # Get the latitude and longitude
+            latitude = float(message.payload.body.latitude)
+            longitude = float(message.payload.body.longitude)
+            # Depending on the sign of the latitude and longitude, set the direction to N, S, E,
+            # or W
+            long_direction = "E" if longitude > 0 else "W"
+            lat_direction = "N" if latitude > 0 else "S"
 
+            # Create the body of the location message
+            body = (
+                f"{message.payload.body.name} - {round(abs(latitude), 4)}° {lat_direction}, "
+                f"{round(abs(longitude), 4)}° {long_direction}"
+            )
+
+            # Set the location message content and send it to Gupshup
+            # The geo_uri is the way to send a location in Matrix
             location_message = LocationMessageEventContent(
                 msgtype=MessageType.LOCATION,
-                body=f"User Location geo:{longitude},{latitude} at {datetime.utcnow()}",
-                geo_uri=f"geo:{longitude},{latitude}",
+                body=f"{message.payload.body.name} {message.payload.body.address}",
+                geo_uri=f"geo:{latitude},{longitude}",
             )
-            await self.main_intent.send_message(room_id=self.mxid, content=location_message)
+            # Send the message to Matrix
+            self.log.debug(f"Sending location message {location_message} to {self.mxid}")
+            mxid = await self.main_intent.send_message(room_id=self.mxid, content=location_message)
 
         if not mxid:
             mxid = await self.main_intent.send_notice(self.mxid, "Contenido no aceptado")
@@ -484,9 +499,15 @@ class Portal(DBPortal, BasePortal):
             )
         elif message.msgtype == MessageType.LOCATION:
             resp = await self.gsc.send_location(
-                self.phone, body=message.body, additional_data=additional_data
+                data=await self.main_data_gs, data_location=message
             )
-
+            if resp.get("status", "") not in (200, 201, 202):
+                self.log.error(f"Error sending location: {resp}")
+                await self.main_intent.send_notice(
+                    room_id=self.mxid,
+                    html=f"<h4>{resp.get('message')}</h4>",
+                )
+                return
         else:
             self.log.debug(f"Ignoring unknown message {message}")
             return
