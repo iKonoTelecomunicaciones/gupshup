@@ -61,7 +61,9 @@ class MatrixHandler(BaseMatrixHandler):
             room_id = evt.room_id
             portal: po.Portal = await po.Portal.get_by_mxid(room_id)
             if not portal:
-                self.log.error("The read event can't be send because the portal does not exist")
+                self.log.error(
+                    f"The read event can't be send because the portal {room_id} does not exist"
+                )
                 return
 
             # We send the read event to Gupshup, for this we need to get the event id of the

@@ -631,8 +631,8 @@ class Portal(DBPortal, BasePortal):
                 message_id=message.gsid, header=header, app_id=gupshup_app.app_id
             )
         except ClientConnectorError as error:
-            self.log.error(f"Error sending the read event: {error}")
+            self.log.error(f"Error sending the read event for event_id {event_id}: {error}")
             return
         except ValueError as error:
-            self.log.error(f"Read event error: {error}")
+            self.log.error(f"Read event error for event_id {event_id}: {error}")
             return

@@ -84,13 +84,13 @@ class GupshupClient:
         """
         self.log.debug(f"Marking message {message_id} as read")
         # Set the url to send the read event to Gupshup
-        mark_read_url = self.read_url.replace("{appId}", app_id).replace("{msgId}", message_id)
+        mark_read_url = self.read_url.format(appId=app_id, msgId=message_id)
 
         # Send the read event to the Gupshup
         response = await self.http.put(url=mark_read_url, headers=header)
 
         if response.status not in (200, 202):
-            self.log.error(f"Try to mark the message as read failed: {response}")
+            self.log.error(f"Trying to mark the message {message_id} as read failed: {response}")
             raise ValueError("Try to mark the message as read failed")
         else:
-            self.log.debug("Message marked as read")
+            self.log.debug(f"Message {message_id} marked as read")
