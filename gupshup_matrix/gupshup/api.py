@@ -7,7 +7,7 @@ from aiohttp import ClientConnectorError, ClientSession
 from mautrix.types import MessageType
 
 from ..config import Config
-from .data import GupshupAccountID, GupshupUserID, GupshupMessageID
+from .data import GupshupAccountID, GupshupMessageID, GupshupUserID
 
 
 class GupshupClient:

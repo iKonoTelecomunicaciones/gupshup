@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 from string import Template
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
-from aiohttp import ClientConnectorError
 
+from aiohttp import ClientConnectorError
 from markdown import markdown
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal
