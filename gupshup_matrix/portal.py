@@ -385,16 +385,6 @@ class Portal(DBPortal, BasePortal):
             # Get the latitude and longitude
             latitude = float(message.payload.body.latitude)
             longitude = float(message.payload.body.longitude)
-            # Depending on the sign of the latitude and longitude, set the direction to N, S, E,
-            # or W
-            long_direction = "E" if longitude > 0 else "W"
-            lat_direction = "N" if latitude > 0 else "S"
-
-            # Create the body of the location message
-            body = (
-                f"{message.payload.body.name} - {round(abs(latitude), 4)}° {lat_direction}, "
-                f"{round(abs(longitude), 4)}° {long_direction}"
-            )
 
             # Set the location message content and send it to Gupshup
             # The geo_uri is the way to send a location in Matrix
