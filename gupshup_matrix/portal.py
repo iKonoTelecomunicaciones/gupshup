@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from string import Template
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
+from aiohttp import ClientConnectorError
 
 from markdown import markdown
 from mautrix.appservice import AppService, IntentAPI
@@ -581,3 +582,57 @@ class Portal(DBPortal, BasePortal):
             gsid=GupshupMessageID(resp.get("messageId")),
             gs_app=self.gs_app,
         ).insert()
+
+    async def handle_matrix_read(self, room_id: RoomID, event_id: str) -> None:
+        """
+        Send a read event to Gupshup
+
+        Params
+        ----------
+        room_id : RoomID
+            The id of the room.
+        event_id : str
+            The id of the event.
+
+        Exceptions
+        ----------
+        ClientConnectorError:
+            Show and error if the connection fails.
+
+        ValueError:
+            Show and error if the read event is not sent.
+        """
+        puppet: p.Puppet = await p.Puppet.get_by_phone(self.phone, create=False)
+        gupshup_app: DBGupshupApplication = await DBGupshupApplication.get_by_admin_user(
+            self.relay_user_id
+        )
+
+        if not puppet:
+            self.log.error("No puppet, ignoring read")
+            return
+
+        if not gupshup_app:
+            self.log.error("No gupshup_app, ignoring read")
+            return
+
+        message: DBMessage = await DBMessage.get_by_mxid(event_id, room_id)
+        if not message:
+            self.log.error("No message, ignoring read")
+            return
+
+        # Set the headers to send the read event to Gupshup
+        header = {
+            "apikey": gupshup_app.api_key,
+            "Content-Type": "application/json",
+        }
+        # We send the read event to Gupshup
+        try:
+            await self.gsc.mark_read(
+                message_id=message.gsid, header=header, app_id=gupshup_app.app_id
+            )
+        except ClientConnectorError as error:
+            self.log.error(f"Error sending the read event: {error}")
+            return
+        except ValueError as error:
+            self.log.error(f"Read event error: {error}")
+            return

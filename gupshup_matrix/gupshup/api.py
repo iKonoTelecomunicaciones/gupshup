@@ -7,7 +7,7 @@ from aiohttp import ClientConnectorError, ClientSession
 from mautrix.types import MessageType
 
 from ..config import Config
-from .data import GupshupUserID
+from .data import GupshupAccountID, GupshupUserID, GupshupMessageID
 
 
 class GupshupClient:
@@ -16,6 +16,7 @@ class GupshupClient:
 
     def __init__(self, config: Config, loop: asyncio.AbstractEventLoop) -> None:
         self.base_url = config["gupshup.base_url"]
+        self.read_url = config["gupshup.read_url"]
         self.app_name = config["gupshup.app_name"]
         self.sender = config["gupshup.sender"]
         self.http = ClientSession(loop=loop)
@@ -29,7 +30,6 @@ class GupshupClient:
         is_gupshup_template: bool = False,
         additional_data: Optional[dict] = None,
     ) -> Dict[str, str]:
-
         headers = data.get("headers")
         data.pop("headers")
 
@@ -61,3 +61,36 @@ class GupshupClient:
 
         response_data = json.loads(await resp.text())
         return response_data
+
+    async def mark_read(
+        self, message_id: GupshupMessageID, header: dict, app_id: GupshupAccountID
+    ):
+        """
+        Send a request to gupshup to mark the message as read.
+
+        Parameters
+        ----------
+        message_id : str
+            The id of the message.
+        header: dict
+            The header to send to Gupshup.
+        app_id: GupshupAccountID
+            The id of the Gupshup account.
+
+        Exceptions
+        ----------
+        ValueError:
+            If the read event was not sent.
+        """
+        self.log.debug(f"Marking message {message_id} as read")
+        # Set the url to send the read event to Gupshup
+        mark_read_url = self.read_url.replace("{appId}", app_id).replace("{msgId}", message_id)
+
+        # Send the read event to the Gupshup
+        response = await self.http.put(url=mark_read_url, headers=header)
+
+        if response.status not in (200, 202):
+            self.log.error(f"Try to mark the message as read failed: {response}")
+            raise ValueError("Try to mark the message as read failed")
+        else:
+            self.log.debug("Message marked as read")

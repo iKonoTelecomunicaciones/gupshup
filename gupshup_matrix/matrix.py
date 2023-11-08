@@ -3,7 +3,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from mautrix.bridge import BaseMatrixHandler, RejectMatrixInvite
-from mautrix.types import Event, EventID, EventType, ReactionEvent, RedactionEvent, RoomID, UserID
+from mautrix.types import (
+    Event,
+    EventID,
+    EventType,
+    ReactionEvent,
+    RedactionEvent,
+    RoomID,
+    UserID,
+    ReceiptEvent,
+)
 
 from . import portal as po
 from . import user as u
@@ -41,6 +50,26 @@ class MatrixHandler(BaseMatrixHandler):
             await self.handle_reaction(
                 evt.room_id, evt.sender, evt.event_id, evt.content, evt.timestamp
             )
+
+    async def handle_ephemeral_event(self, evt: ReceiptEvent) -> None:
+        """
+        Handle the ephemeral events, like reads, typing, etc.
+        """
+        self.log.debug(f"Received event: {evt}")
+        # Validate that the event is a read event
+        if evt.type == EventType.RECEIPT:
+            room_id = evt.room_id
+            portal: po.Portal = await po.Portal.get_by_mxid(room_id)
+            if not portal:
+                self.log.error("The read event can't be send because the portal does not exist")
+                return
+
+            # We send the read event to Gupshup, for this we need to get the event id of the
+            # read event, this is the first key of the content dict
+            await portal.handle_matrix_read(
+                room_id=evt.room_id, event_id=list(evt.content.keys())[0]
+            )
+        return
 
     async def handle_invite(
         self, room_id: RoomID, user_id: UserID, inviter: u.User, event_id: EventID
