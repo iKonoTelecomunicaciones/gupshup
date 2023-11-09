@@ -583,7 +583,7 @@ class Portal(DBPortal, BasePortal):
             gs_app=self.gs_app,
         ).insert()
 
-    async def handle_matrix_read(self, room_id: RoomID, event_id: str) -> None:
+    async def handle_matrix_read_receipt(self, user: u.User, event_id: str) -> None:
         """
         Send a read event to Gupshup
 
@@ -611,25 +611,14 @@ class Portal(DBPortal, BasePortal):
             self.log.error("No puppet, ignoring read")
             return
 
-        if not gupshup_app:
-            self.log.error("No gupshup_app, ignoring read")
-            return
-
-        message: DBMessage = await DBMessage.get_by_mxid(event_id, room_id)
+        message: DBMessage = await DBMessage.get_by_mxid(event_id, self.mxid)
         if not message:
-            self.log.error("No message, ignoring read")
+            self.log.error(f"No message with mxid: {event_id}, ignoring read")
             return
 
-        # Set the headers to send the read event to Gupshup
-        header = {
-            "apikey": gupshup_app.api_key,
-            "Content-Type": "application/json",
-        }
         # We send the read event to Gupshup
         try:
-            await self.gsc.mark_read(
-                message_id=message.gsid, header=header, app_id=gupshup_app.app_id
-            )
+            await self.gsc.mark_read(message_id=message.gsid, gupshup_app=gupshup_app)
         except ClientConnectorError as error:
             self.log.error(f"Error sending the read event for event_id {event_id}: {error}")
             return

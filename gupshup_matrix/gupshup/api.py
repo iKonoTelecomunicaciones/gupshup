@@ -7,7 +7,8 @@ from aiohttp import ClientConnectorError, ClientSession
 from mautrix.types import MessageType
 
 from ..config import Config
-from .data import GupshupAccountID, GupshupMessageID, GupshupUserID
+from .data import GupshupMessageID
+from ..db import GupshupApplication as DBGupshupApplication
 
 
 class GupshupClient:
@@ -62,9 +63,7 @@ class GupshupClient:
         response_data = json.loads(await resp.text())
         return response_data
 
-    async def mark_read(
-        self, message_id: GupshupMessageID, header: dict, app_id: GupshupAccountID
-    ):
+    async def mark_read(self, message_id: GupshupMessageID, gupshup_app: DBGupshupApplication):
         """
         Send a request to gupshup to mark the message as read.
 
@@ -82,9 +81,19 @@ class GupshupClient:
         ValueError:
             If the read event was not sent.
         """
+        if not gupshup_app:
+            self.log.error("No gupshup_app, ignoring read")
+            return
+
+        # Set the headers to send the read event to Gupshup
+        header = {
+            "apikey": gupshup_app.api_key,
+            "Content-Type": "application/json",
+        }
+
         self.log.debug(f"Marking message {message_id} as read")
         # Set the url to send the read event to Gupshup
-        mark_read_url = self.read_url.format(appId=app_id, msgId=message_id)
+        mark_read_url = self.read_url.format(appId=gupshup_app.app_id, msgId=message_id)
 
         # Send the read event to the Gupshup
         response = await self.http.put(url=mark_read_url, headers=header)

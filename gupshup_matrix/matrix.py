@@ -8,7 +8,7 @@ from mautrix.types import (
     EventID,
     EventType,
     ReactionEvent,
-    ReceiptEvent,
+    SingleReceiptEventContent,
     RedactionEvent,
     RoomID,
     UserID,
@@ -50,28 +50,6 @@ class MatrixHandler(BaseMatrixHandler):
             await self.handle_reaction(
                 evt.room_id, evt.sender, evt.event_id, evt.content, evt.timestamp
             )
-
-    async def handle_ephemeral_event(self, evt: ReceiptEvent) -> None:
-        """
-        Handle the ephemeral events, like reads, typing, etc.
-        """
-        self.log.debug(f"Received event: {evt}")
-        # Validate that the event is a read event
-        if evt.type == EventType.RECEIPT:
-            room_id = evt.room_id
-            portal: po.Portal = await po.Portal.get_by_mxid(room_id)
-            if not portal:
-                self.log.error(
-                    f"The read event can't be send because the portal {room_id} does not exist"
-                )
-                return
-
-            # We send the read event to Gupshup, for this we need to get the event id of the
-            # read event, this is the first key of the content dict
-            await portal.handle_matrix_read(
-                room_id=evt.room_id, event_id=list(evt.content.keys())[0]
-            )
-        return
 
     async def handle_invite(
         self, room_id: RoomID, user_id: UserID, inviter: u.User, event_id: EventID
@@ -127,3 +105,9 @@ class MatrixHandler(BaseMatrixHandler):
 
     async def allow_bridging_message(self, user: u.User, portal: po.Portal) -> bool:
         return portal.has_relay or await user.is_logged_in()
+
+    async def handle_read_receipt(
+        self, user: u.User, portal: po.Portal, event_id: EventID, data: SingleReceiptEventContent
+    ) -> None:
+        self.log.debug(f"Got read receipt for {event_id} from {user.mxid}")
+        await portal.handle_matrix_read_receipt(user, event_id)

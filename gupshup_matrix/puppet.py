@@ -74,7 +74,7 @@ class Puppet(DBPuppet, BasePuppet):
             prefix="@",
             suffix=f":{cls.hs_domain}",
         )
-        cls.sync_with_custom_puppets = cls.config["bridge.sync_with_custom_puppets"]
+        cls.sync_with_custom_puppets = False
 
         cls.login_device_name = "Gupshup Bridge"
         return (puppet.try_start() async for puppet in cls.all_with_custom_mxid())

@@ -74,6 +74,9 @@ bridge:
     # Whether or not created rooms should have federation enabled.
     # If false, created portal rooms will never be federated.
     federate_rooms: true
+    # Whether or not to use /sync to get read receipts and typing notifications
+    # when double puppeting is enabled
+    sync_with_custom_puppets: false
 
     # Provisioning API part of the web server for automated portal creation and fetching information.
     # Used by things like mautrix-manager (https://github.com/tulir/mautrix-manager).
