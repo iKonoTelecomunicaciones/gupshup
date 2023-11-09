@@ -8,9 +8,9 @@ from mautrix.types import (
     EventID,
     EventType,
     ReactionEvent,
-    SingleReceiptEventContent,
     RedactionEvent,
     RoomID,
+    SingleReceiptEventContent,
     UserID,
 )
 
