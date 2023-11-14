@@ -65,21 +65,19 @@ class GupshupClient:
 
     async def mark_read(self, message_id: GupshupMessageID, gupshup_app: DBGupshupApplication):
         """
-        Send a request to gupshup to mark the message as read.
+         Send a request to gupshup to mark the message as read.
 
-        Parameters
-        ----------
-        message_id : str
-            The id of the message.
-        header: dict
-            The header to send to Gupshup.
-        app_id: GupshupAccountID
-            The id of the Gupshup account.
+         Parameters
+         ----------
+         message_id : str
+             The id of the message.
+        gupshup_app: DBGupshupApplication
+             The gupshup application that will be used to send the read event.
 
-        Exceptions
-        ----------
-        ValueError:
-            If the read event was not sent.
+         Exceptions
+         ----------
+         ValueError:
+             If the read event was not sent.
         """
         if not gupshup_app:
             self.log.error("No gupshup_app, ignoring read")

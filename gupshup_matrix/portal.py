@@ -314,8 +314,8 @@ class Portal(DBPortal, BasePortal):
                 content_image = MediaMessageEventContent(
                     body="", msgtype=msgtype, url=mxc, info=FileInfo(size=len(data))
                 )
-                mxid = await self.main_intent.send_message(self.mxid, content_image)
-                await self.send_text_message(msgbody)
+                await self.main_intent.send_message(self.mxid, content_image)
+                mxid = await self.send_text_message(msgbody)
 
             elif message.payload.type in ("audio", "file"):
                 msgtype = (
@@ -600,14 +600,12 @@ class Portal(DBPortal, BasePortal):
             gs_app=self.gs_app,
         ).insert()
 
-    async def handle_matrix_read_receipt(self, user: u.User, event_id: str) -> None:
+    async def handle_matrix_read_receipt(self, event_id: str) -> None:
         """
         Send a read event to Gupshup
 
         Params
         ----------
-        room_id : RoomID
-            The id of the room.
         event_id : str
             The id of the event.
 

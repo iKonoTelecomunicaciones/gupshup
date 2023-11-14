@@ -110,4 +110,4 @@ class MatrixHandler(BaseMatrixHandler):
         self, user: u.User, portal: po.Portal, event_id: EventID, data: SingleReceiptEventContent
     ) -> None:
         self.log.debug(f"Got read receipt for {event_id} from {user.mxid}")
-        await portal.handle_matrix_read_receipt(user, event_id)
+        await portal.handle_matrix_read_receipt(event_id)
