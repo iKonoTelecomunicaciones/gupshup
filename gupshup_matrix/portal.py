@@ -433,6 +433,73 @@ class Portal(DBPortal, BasePortal):
                     await self.main_intent.react(self.mxid, msg.mxid, "\u274c")
                 await self.main_intent.send_notice(self.mxid, None, html=reason_es)
 
+    async def handle_gupshup_reaction(
+        self, sender: u.User, info: ChatInfo, message: GupshupMessageEvent
+    ):
+        if not self.mxid:
+            return
+
+        data_reaction = message.payload.body
+        self.log.critical(f"Reaction: {message.payload}")
+        self.log.critical(f"Info: {info}")
+        self.log.critical(f"sender: {sender}")
+        self.log.critical(f"self: {self}")
+        msg_id = data_reaction.msg_gsId if data_reaction.msg_gsId else data_reaction.msg_id
+        msg: DBMessage = await DBMessage.get_by_gsid(gsid=msg_id)
+        self.log.critical(f"Message: {msg}")
+        if msg:
+            if not data_reaction.emoji:
+                reaction_to_remove: DBReaction = await DBReaction.get_by_gs_message_id(
+                    msg.gsid, sender.mxid
+                )
+
+                if reaction_to_remove:
+                    self.log.critical(f"reaction_to_remove: {reaction_to_remove}")
+
+                    await DBReaction.delete_by_event_mxid(
+                        reaction_to_remove.event_mxid, self.mxid, sender.mxid
+                    )
+                    has_been_sent = await self.main_intent.redact(
+                        self.mxid, reaction_to_remove.event_mxid
+                    )
+                return
+            else:
+                message_with_reaction: DBReaction = await DBReaction.get_by_gs_message_id(
+                    msg.gsid, sender.mxid
+                )
+
+                if message_with_reaction:
+                    await DBReaction.delete_by_event_mxid(
+                        message_with_reaction.event_mxid, self.mxid, sender.mxid
+                    )
+                    self.log.critical(f"Message with reaction: {message_with_reaction}")
+                    await self.main_intent.redact(self.mxid, message_with_reaction.event_mxid)
+
+                try:
+                    has_been_sent = await self.main_intent.react(
+                        self.mxid,
+                        msg.mxid,
+                        data_reaction.emoji,
+                    )
+                except Exception as e:
+                    self.log.exception(f"Error sending reaction: {e}")
+                    await self.main_intent.send_notice(self.mxid, "Error sending reaction")
+                    return
+
+        else:
+            self.log.error(f"Message id not found, mid: {msg_id}")
+            await self.main_intent.send_notice(self.mxid, "Error sending reaction")
+            return
+
+        await DBReaction(
+            event_mxid=has_been_sent,
+            room_id=self.mxid,
+            sender=sender.mxid,
+            gs_message_id=msg.gsid,
+            reaction=data_reaction.emoji,
+            created_at=datetime.now(),
+        ).insert()
+
     async def handle_matrix_message(
         self,
         sender: "u.User",
@@ -614,7 +681,10 @@ class Portal(DBPortal, BasePortal):
         message: DBMessage = await DBMessage.get_by_mxid(message_mxid, room_id)
 
         if not message:
-            await self.main_intent.send_notice(f"We couldn't find the message to react to")
+            self.log.error(f"Message {message_mxid} not found when handling reaction")
+            await self.main_intent.send_notice(
+                self.mxid, "We couldn't find the message to react to"
+            )
             return
 
         reaction_value = content.relates_to.key
@@ -622,10 +692,11 @@ class Portal(DBPortal, BasePortal):
         data = await self.main_data_gs
         self.log.critical(f"reaction_value {reaction_value}")
         if message_with_reaction:
+            self.log.critical(f"self {self}")
             await DBReaction.delete_by_event_mxid(
                 message_with_reaction.event_mxid, self.mxid, user.mxid
             )
-            # await self.az.intent.redact(self.mxid, message_with_reaction.event_mxid)
+            await self.main_intent.redact(self.mxid, message_with_reaction.event_mxid)
 
         try:
             await self.gsc.send_reaction(
@@ -638,7 +709,10 @@ class Portal(DBPortal, BasePortal):
             self.log.error(e)
             await self.main_intent.send_notice(f"Error sending reaction: {e}")
             return
-
+        except TypeError as e:
+            self.log.error(e)
+            await self.main_intent.send_notice(f"Error sending reaction: {e}")
+            return
         except Exception as e:
             self.log.error(f"Error sending reaction: {e}")
             self.log.exception(f"Error sending reaction: {e}")
@@ -653,3 +727,40 @@ class Portal(DBPortal, BasePortal):
             reaction=reaction_value,
             created_at=datetime.now(),
         ).insert()
+
+    async def handle_matrix_redaction(
+        self,
+        user: u.User,
+        event_id: EventID,
+    ) -> None:
+        """
+        When a user of Matrix redaction to a message, this function takes it and sends it to Gupshup
+
+        Parameters
+        ----------
+        user : User
+            The user who sent the redaction
+
+        event_id:
+            The event_id of the reaction that was redacted
+        """
+        self.log.debug(f"Handling redaction for {event_id}")
+        data = await self.main_data_gs
+        message: DBReaction = await DBReaction.get_by_event_mxid(event_id, self.mxid)
+
+        if not message:
+            self.log.error(f"Message {event_id} not found when handling redaction")
+            await self.main_intent.send_notice(
+                self.mxid, "We couldn't find the message when handling redaction"
+            )
+            return
+
+        try:
+            await self.gsc.send_reaction(
+                message_id=message.gs_message_id, emoji="", type="reaction", data=data
+            )
+        except Exception as e:
+            self.log.exception(f"Error sending reaction: {e}")
+            return
+
+        await DBReaction.delete_by_event_mxid(message.event_mxid, self.mxid, user.mxid)

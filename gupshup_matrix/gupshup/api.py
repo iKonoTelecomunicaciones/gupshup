@@ -76,9 +76,10 @@ class GupshupClient:
         """
         headers = data.get("headers")
         data.pop("headers")
-        data["message"] = json.dumps({"msgId": message_id, "type": type, "emoji": "🫡"})
+        data["message"] = json.dumps({"msgId": message_id, "type": type, "emoji": emoji})
 
         self.log.critical(f"Sending reaction {data}")
         resp = await self.http.post(self.reaction_url, data=data, headers=headers)
+        self.log.critical(f"Response from gupshup: status: {resp.status}: {resp}")
         response_data = json.loads(await resp.text())
         return response_data

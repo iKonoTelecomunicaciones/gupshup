@@ -97,7 +97,7 @@ class MatrixHandler(BaseMatrixHandler):
         if not portal:
             return
 
-        await portal.handle_matrix_redaction(user, event_id, redaction_event_id)
+        await portal.handle_matrix_redaction(user, event_id)
 
     async def allow_message(self, user: u.User) -> bool:
         return user.relay_whitelisted
