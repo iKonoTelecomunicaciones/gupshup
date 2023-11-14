@@ -3,6 +3,7 @@
 *.egg-info
 /build
 /dist
+/.vscode
 
 config.yaml
 registration.yaml

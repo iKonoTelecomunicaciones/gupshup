@@ -65,10 +65,6 @@ bridge:
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!gs"
 
-    # Google maps URL.
-    # {latitude} and {longitude} is replaced with valid values.
-    google_maps_url: https://www.google.com/maps?q={latitude},{longitude}
-
     # Whether or not Matrix m.notice-type messages should be bridged.
     bridge_notices: false
     # Whether or not created rooms should have federation enabled.

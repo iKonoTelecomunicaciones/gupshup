@@ -103,3 +103,55 @@ class GupshupClient:
             raise ValueError("Try to mark the message as read failed")
         else:
             self.log.debug(f"Message {message_id} marked as read")
+
+    async def send_location(
+        self,
+        data: dict,
+        data_location: dict,
+    ) -> Dict[str, str]:
+        """
+        Send a location to a user.
+
+        Parameters
+        ----------
+        data : dict
+            The data with Gupshup needed to send the message, it contains the headers, the channel,
+            the source, the destination and the app name.
+
+        data_location : dict
+            Contains the location that will be sent to the user.
+
+        Exceptions
+        ----------
+        ClientConnectorError:
+            Show and error if the connection fails.
+        """
+        headers = data.get("headers")
+        data.pop("headers")
+        # Get the latitude and longitude from the geo_uri
+        location = data_location.get("geo_uri").split(":")[1].split(";")[0]
+        latitude = location.split(",")[0]
+        longitude = location.split(",")[1]
+
+        data["message"] = json.dumps(
+            {
+                "type": "location",
+                "latitude": latitude,
+                "longitude": longitude,
+                "name": "User Location",
+                "address": location,
+            }
+        )
+        self.log.debug(f"Sending location message: {data}")
+        try:
+            resp = await self.http.post(self.base_url, data=data, headers=headers)
+        except ClientConnectorError as e:
+            self.log.error(e)
+            return {"status": 400, "message": e}
+
+        if resp.status not in (200, 201, 202):
+            self.log.error(f"Error sending location message: {resp}")
+            return {"status": resp.status, "message": "Error sending location message"}
+
+        response_data = json.loads(await resp.text())
+        return {"status": resp.status, "messageId": response_data.get("messageId")}
