@@ -288,12 +288,23 @@ class Portal(DBPortal, BasePortal):
     async def handle_gupshup_message(
         self, source: u.User, info: ChatInfo, message: GupshupMessageEvent
     ) -> None:
+        """
+        Send a message to element and create a room if it doesn't exist.
+
+        Parameters
+        ----------
+        source: User
+            The user who sent the reaction
+        info: ChatInfo
+            The information of the user who sent the message
+        message: GupshupMessageEvent
+            The content of the reaction event
+        """
         if not await self.create_matrix_room(source=source, info=info):
             return
 
         mxid = None
         msgtype = MessageType.TEXT
-        self.log.critical(f"Message: {message}")
         if message.payload.body.url:
             resp = await self.az.http_session.get(message.payload.body.url)
             data = await resp.read()
@@ -433,20 +444,23 @@ class Portal(DBPortal, BasePortal):
                     await self.main_intent.react(self.mxid, msg.mxid, "\u274c")
                 await self.main_intent.send_notice(self.mxid, None, html=reason_es)
 
-    async def handle_gupshup_reaction(
-        self, sender: u.User, info: ChatInfo, message: GupshupMessageEvent
-    ):
+    async def handle_gupshup_reaction(self, sender: u.User, message: GupshupMessageEvent):
+        """
+        Send a reaction to element.
+
+        Parameters
+        ----------
+        sender: User
+            The user who sent the reaction
+        message: GupshupMessageEvent
+            The content with the reaction event
+        """
         if not self.mxid:
             return
 
         data_reaction = message.payload.body
-        self.log.critical(f"Reaction: {message.payload}")
-        self.log.critical(f"Info: {info}")
-        self.log.critical(f"sender: {sender}")
-        self.log.critical(f"self: {self}")
         msg_id = data_reaction.msg_gsId if data_reaction.msg_gsId else data_reaction.msg_id
         msg: DBMessage = await DBMessage.get_by_gsid(gsid=msg_id)
-        self.log.critical(f"Message: {msg}")
         if msg:
             if not data_reaction.emoji:
                 reaction_to_remove: DBReaction = await DBReaction.get_by_gs_message_id(
@@ -454,8 +468,6 @@ class Portal(DBPortal, BasePortal):
                 )
 
                 if reaction_to_remove:
-                    self.log.critical(f"reaction_to_remove: {reaction_to_remove}")
-
                     await DBReaction.delete_by_event_mxid(
                         reaction_to_remove.event_mxid, self.mxid, sender.mxid
                     )
@@ -472,7 +484,6 @@ class Portal(DBPortal, BasePortal):
                     await DBReaction.delete_by_event_mxid(
                         message_with_reaction.event_mxid, self.mxid, sender.mxid
                     )
-                    self.log.critical(f"Message with reaction: {message_with_reaction}")
                     await self.main_intent.redact(self.mxid, message_with_reaction.event_mxid)
 
                 try:
@@ -690,9 +701,7 @@ class Portal(DBPortal, BasePortal):
         reaction_value = content.relates_to.key
         message_with_reaction = await DBReaction.get_by_gs_message_id(message.gsid, user.mxid)
         data = await self.main_data_gs
-        self.log.critical(f"reaction_value {reaction_value}")
         if message_with_reaction:
-            self.log.critical(f"self {self}")
             await DBReaction.delete_by_event_mxid(
                 message_with_reaction.event_mxid, self.mxid, user.mxid
             )

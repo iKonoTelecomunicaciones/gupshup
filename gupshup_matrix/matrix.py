@@ -42,7 +42,6 @@ class MatrixHandler(BaseMatrixHandler):
         await portal.handle_matrix_leave(user)
 
     async def handle_event(self, evt: Event) -> None:
-        self.log.critical(f"Received event {evt}")
         if evt.type == EventType.ROOM_REDACTION:
             evt: RedactionEvent
             await self.handle_redaction(evt.room_id, evt.sender, evt.redacts, evt.event_id)
@@ -139,9 +138,6 @@ class MatrixHandler(BaseMatrixHandler):
         if not portal:
             return
         try:
-            self.log.critical(f"Trying to send a reaction {content.relates_to}")
-            self.log.critical(f"message_mxid {message_mxid}")
-            self.log.critical(f"event_id {event_id}")
             await portal.handle_matrix_reaction(user, message_mxid, event_id, room_id, content)
         except ValueError as error:
             self.log.error(f"Error trying to send a reaction {error}")

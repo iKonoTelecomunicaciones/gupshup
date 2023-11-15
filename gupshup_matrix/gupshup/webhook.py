@@ -110,7 +110,7 @@ class GupshupHandler:
         info = ChatInfo.deserialize(data.__dict__)
         info.sender = data.payload.sender
         if data.payload.type == "reaction":
-            await portal.handle_gupshup_reaction(user, info, data)
+            await portal.handle_gupshup_reaction(user, data)
         else:
             await portal.handle_gupshup_message(user, info, data)
         return web.Response(status=204)
