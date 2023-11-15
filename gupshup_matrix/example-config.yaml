@@ -70,6 +70,9 @@ bridge:
     # Whether or not created rooms should have federation enabled.
     # If false, created portal rooms will never be federated.
     federate_rooms: true
+    # Whether or not to use /sync to get read receipts and typing notifications
+    # when double puppeting is enabled
+    sync_with_custom_puppets: false
 
     # Provisioning API part of the web server for automated portal creation and fetching information.
     # Used by things like mautrix-manager (https://github.com/tulir/mautrix-manager).
@@ -108,18 +111,19 @@ bridge:
         #   $sender_mxid        - The Matrix ID of the sender (e.g. @exampleuser:example.com)
         #   $message            - The message content
         message_formats:
-            m.text: '*$sender_displayname*: $message'
-            m.notice: '$sender_displayname: $message'
-            m.file: '$sender_displayname sent a file'
-            m.image: '$sender_displayname sent an image'
-            m.audio: '$sender_displayname sent an audio file'
-            m.video: '$sender_displayname sent a video'
-            m.location: '$sender_displayname sent a location'
+            m.text: "*$sender_displayname*: $message"
+            m.notice: "$sender_displayname: $message"
+            m.file: "$sender_displayname sent a file"
+            m.image: "$sender_displayname sent an image"
+            m.audio: "$sender_displayname sent an audio file"
+            m.video: "$sender_displayname sent a video"
+            m.location: "$sender_displayname sent a location"
 
 # Gupshup webhook settings.
 gupshup:
     # Gupsghup base URL
     base_url: https://api.gupshup.io/sm/api/v1/msg
+    read_url: https://api.gupshup.io/wa/app/{appId}/msg/{msgId}/read
     # Path prefix for webhook endpoints. Subpaths are /status and /receive.
     # Note that the webhook must be put behind a reverse proxy with https.
     webhook_path: /gupshup
