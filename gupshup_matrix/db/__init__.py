@@ -4,9 +4,9 @@ from .gupshup_application import GupshupApplication
 from .message import Message
 from .portal import Portal
 from .puppet import Puppet
+from .reaction import Reaction
 from .upgrade import upgrade_table
 from .user import User
-from .reaction import Reaction
 
 
 def init(db: Database) -> None:

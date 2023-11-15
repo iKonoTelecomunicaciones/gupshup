@@ -8,10 +8,10 @@ from mautrix.types import (
     EventID,
     EventType,
     ReactionEvent,
+    ReactionEventContent,
     RedactionEvent,
     RoomID,
     UserID,
-    ReactionEventContent,
 )
 
 from . import portal as po

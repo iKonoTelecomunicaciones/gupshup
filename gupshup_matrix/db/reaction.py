@@ -8,7 +8,6 @@ from attr import dataclass
 from mautrix.types import EventID, RoomID, UserID
 from mautrix.util.async_db import Database
 
-
 fake_db = Database.create("") if TYPE_CHECKING else None
 
 log: logging.Logger = logging.getLogger("meta.out")

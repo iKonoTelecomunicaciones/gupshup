@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 from string import Template
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
+
 from aiohttp import ClientConnectorError
-from datetime import datetime
-
-
 from markdown import markdown
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal
@@ -20,10 +19,10 @@ from mautrix.types import (
     MessageEventContent,
     MessageType,
     PowerLevelStateEventContent,
+    ReactionEventContent,
     RoomID,
     TextMessageEventContent,
     UserID,
-    ReactionEventContent,
 )
 
 from gupshup_matrix.formatter.from_matrix import matrix_to_whatsapp
@@ -33,8 +32,8 @@ from . import puppet as p
 from . import user as u
 from .db import GupshupApplication as DBGupshupApplication
 from .db import Message as DBMessage
-from .db import Reaction as DBReaction
 from .db import Portal as DBPortal
+from .db import Reaction as DBReaction
 from .formatter import whatsapp_reply_to_matrix, whatsapp_to_matrix
 from .gupshup import (
     GupshupClient,
