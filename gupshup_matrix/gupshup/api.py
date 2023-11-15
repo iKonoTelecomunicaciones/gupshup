@@ -16,6 +16,7 @@ class GupshupClient:
 
     def __init__(self, config: Config, loop: asyncio.AbstractEventLoop) -> None:
         self.base_url = config["gupshup.base_url"]
+        self.cloud_url = config["gupshup.cloud_url"]
         self.app_name = config["gupshup.app_name"]
         self.sender = config["gupshup.sender"]
         self.http = ClientSession(loop=loop)
@@ -27,34 +28,65 @@ class GupshupClient:
         msgtype: Optional[str] = None,
         media: Optional[str] = None,
         is_gupshup_template: bool = False,
-        additional_data: Optional[dict] = None,
+        additional_data: Optional[dict] = {},
     ) -> Dict[str, str]:
         headers = data.get("headers")
         data.pop("headers")
 
         if body and msgtype is None and not is_gupshup_template:
-            data["message"] = json.dumps({"isHSM": "false", "type": "text", "text": body})
-        elif additional_data:
-            data["message"] = json.dumps(additional_data)
+            data["message"] = json.dumps(
+                {
+                    "isHSM": "false",
+                    "type": "text",
+                    "text": body,
+                    "context": additional_data.get("context", {}),
+                }
+            )
         else:
-            data["message"] = json.dumps({"isHSM": "true", "type": "text", "text": body})
+            data["message"] = json.dumps(
+                {
+                    "isHSM": "true",
+                    "type": "text",
+                    "text": body,
+                    "context": additional_data.get("context", {}),
+                }
+            )
 
         if media:
             if msgtype == MessageType.IMAGE:
                 data["message"] = json.dumps(
-                    {"type": "image", "originalUrl": media, "previewUrl": media}
+                    {
+                        "type": "image",
+                        "originalUrl": media,
+                        "previewUrl": media,
+                        "context": additional_data.get("context", {}),
+                    }
                 )
             elif msgtype == MessageType.VIDEO:
-                data["message"] = json.dumps({"type": "video", "url": media})
+                data["message"] = json.dumps(
+                    {"type": "video", "url": media, "context": additional_data.get("context", {})}
+                )
             elif msgtype == MessageType.AUDIO:
-                data["message"] = json.dumps({"type": "audio", "url": media})
+                data["message"] = json.dumps(
+                    {"type": "audio", "url": media, "context": additional_data.get("context", {})}
+                )
             elif msgtype == MessageType.FILE:
-                data["message"] = json.dumps({"type": "file", "url": media, "filename": body})
+                data["message"] = json.dumps(
+                    {
+                        "type": "file",
+                        "url": media,
+                        "filename": body,
+                        "context": additional_data.get("context", {}),
+                    }
+                )
 
         self.log.debug(f"Sending message {data}")
 
         try:
-            resp = await self.http.post(self.base_url, data=data, headers=headers)
+            if additional_data:
+                resp = await self.http.post(self.cloud_url, data=data, headers=headers)
+            else:
+                resp = await self.http.post(self.base_url, data=data, headers=headers)
         except ClientConnectorError as e:
             self.log.error(e)
 
@@ -62,9 +94,7 @@ class GupshupClient:
         return response_data
 
     async def send_location(
-        self,
-        data: dict,
-        data_location: dict,
+        self, data: dict, data_location: dict, additional_data: Optional[dict] = {}
     ) -> Dict[str, str]:
         """
         Send a location to a user.
@@ -97,11 +127,15 @@ class GupshupClient:
                 "longitude": longitude,
                 "name": "User Location",
                 "address": location,
+                "context": additional_data.get("context", {}),
             }
         )
         self.log.debug(f"Sending location message: {data}")
         try:
-            resp = await self.http.post(self.base_url, data=data, headers=headers)
+            if additional_data:
+                resp = await self.http.post(self.cloud_url, data=data, headers=headers)
+            else:
+                resp = await self.http.post(self.base_url, data=data, headers=headers)
         except ClientConnectorError as e:
             self.log.error(e)
             return {"status": 400, "message": e}
