@@ -16,10 +16,10 @@ from mautrix.types import (
     Format,
     MessageType,
     PowerLevelStateEventContent,
+    RelatesTo,
+    RelationType,
     RoomID,
     UserID,
-    RelationType,
-    RelatesTo,
 )
 from mautrix.types.event import (
     LocationMessageEventContent,
@@ -36,7 +36,7 @@ from . import user as u
 from .db import GupshupApplication as DBGupshupApplication
 from .db import Message as DBMessage
 from .db import Portal as DBPortal
-from .formatter import whatsapp_reply_to_matrix, whatsapp_to_matrix, _add_reply_header
+from .formatter import _add_reply_header, whatsapp_reply_to_matrix, whatsapp_to_matrix
 from .gupshup import (
     GupshupClient,
     GupshupMessageEvent,
