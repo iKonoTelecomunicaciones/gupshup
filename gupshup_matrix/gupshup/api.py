@@ -31,6 +31,30 @@ class GupshupClient:
         is_gupshup_template: bool = False,
         additional_data: Optional[dict] = {},
     ) -> Dict[str, str]:
+        """
+        Send a message to a user.
+
+        Parameters
+        ----------
+        data: dict
+            The data with Gupshup needed to send the message, it contains the headers, the channel,
+            the source, the destination and the app name.
+        body: Optional[str]
+            The text of the message or the name of the file if the message is a file.
+        msgtype: Optional[str]
+            The type of the message, it can be a text message, a file, an image, a video, etc.
+        media: Optional[str]
+            The url of the media if the message is a file, an image, a video, etc.
+        is_gupshup_template: bool
+            If the message is a Gupshup template or not.
+        additional_data: Optional[dict]
+            Contains the id of the message that the user is replying to.
+
+        Exceptions
+        ----------
+        ClientConnectorError:
+            Show and error if the connection fails.
+        """
         headers = data.get("headers")
         data.pop("headers")
 
@@ -114,6 +138,9 @@ class GupshupClient:
         data_location : dict
             Contains the location that will be sent to the user.
 
+        additional_data : Optional[dict]
+            Contains the id of the message that the user is replying to, it is used only for
+            replies.
         Exceptions
         ----------
         ClientConnectorError:
@@ -138,7 +165,7 @@ class GupshupClient:
         )
         self.log.debug(f"Sending location message: {data}")
         try:
-            if additional_data:
+            if additional_data and self.is_cloud:
                 resp = await self.http.post(self.cloud_url, data=data, headers=headers)
             else:
                 resp = await self.http.post(self.base_url, data=data, headers=headers)

@@ -296,6 +296,10 @@ class Portal(DBPortal, BasePortal):
 
         evt = None
         if message.payload.context:
+            # Depending on where the message comes from, the id is different, if it comes from
+            # Matrix, the id is a Gupshup id (it is happend because Gupshup use an id for the
+            # message that does not come from Whatsapp Api Cloud),
+            # otherwise is a Whatsapp Cloud id.
             if message.payload.context.msg_gsId:
                 mgs_id = message.payload.context.msg_gsId
             else:
@@ -377,7 +381,6 @@ class Portal(DBPortal, BasePortal):
         elif message.payload.type == "text":
             if evt:
                 content = await whatsapp_reply_to_matrix(body, evt, self.main_intent, self.log)
-                content.external_url = content.external_url
                 mxid = await self.main_intent.send_message(self.mxid, content)
             else:
                 mxid = await self.send_text_message(message.payload.body.text)
