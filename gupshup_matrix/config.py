@@ -52,6 +52,8 @@ class Config(BaseBridgeConfig):
         copy_dict("bridge.relay.message_formats")
 
         copy("gupshup.base_url")
+        copy("gupshup.cloud_url")
+        copy("gupshup.is_cloud")
         copy("gupshup.webhook_path")
 
         copy_dict("quick_reply")

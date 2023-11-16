@@ -616,6 +616,7 @@ class Portal(DBPortal, BasePortal):
         resp = await self.gsc.send_message(
             data=await self.main_data_gs,
             additional_data=interactive_message.serialize(),
+            msgtype="m.interactive_message",
         )
 
         await DBMessage(

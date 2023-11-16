@@ -17,6 +17,7 @@ class GupshupClient:
     def __init__(self, config: Config, loop: asyncio.AbstractEventLoop) -> None:
         self.base_url = config["gupshup.base_url"]
         self.cloud_url = config["gupshup.cloud_url"]
+        self.is_cloud = config["gupshup.is_cloud"]
         self.app_name = config["gupshup.app_name"]
         self.sender = config["gupshup.sender"]
         self.http = ClientSession(loop=loop)
@@ -42,6 +43,11 @@ class GupshupClient:
                     "context": additional_data.get("context", {}),
                 }
             )
+        # If the message is a interactive message, the additional_data is a dict with the quick
+        # replies or lists, otherwise additional_data has an id of a message that
+        # the user is replying to
+        elif msgtype == "m.interactive_message":
+            data["message"] = json.dumps(additional_data)
         else:
             data["message"] = json.dumps(
                 {
@@ -83,7 +89,7 @@ class GupshupClient:
         self.log.debug(f"Sending message {data}")
 
         try:
-            if additional_data:
+            if additional_data.get("context", {}) and self.is_cloud:
                 resp = await self.http.post(self.cloud_url, data=data, headers=headers)
             else:
                 resp = await self.http.post(self.base_url, data=data, headers=headers)
