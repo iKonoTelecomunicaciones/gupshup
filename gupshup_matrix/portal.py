@@ -461,40 +461,35 @@ class Portal(DBPortal, BasePortal):
         msg_id = data_reaction.msg_gsId if data_reaction.msg_gsId else data_reaction.msg_id
         msg: DBMessage = await DBMessage.get_by_gsid(gsid=msg_id)
         if msg:
-            if not data_reaction.emoji:
-                reaction_to_remove: DBReaction = await DBReaction.get_by_gs_message_id(
-                    msg.gsid, sender.mxid
-                )
+            message_with_reaction: DBReaction = await DBReaction.get_by_gs_message_id(
+                msg.gsid, sender.mxid
+            )
 
-                if reaction_to_remove:
+            if message_with_reaction:
+                if not data_reaction.emoji:
                     await DBReaction.delete_by_event_mxid(
-                        reaction_to_remove.event_mxid, self.mxid, sender.mxid
+                        message_with_reaction.event_mxid, self.mxid, sender.mxid
                     )
                     has_been_sent = await self.main_intent.redact(
-                        self.mxid, reaction_to_remove.event_mxid
+                        self.mxid, message_with_reaction.event_mxid
                     )
-                return
-            else:
-                message_with_reaction: DBReaction = await DBReaction.get_by_gs_message_id(
-                    msg.gsid, sender.mxid
-                )
-
-                if message_with_reaction:
+                    return
+                else:
                     await DBReaction.delete_by_event_mxid(
                         message_with_reaction.event_mxid, self.mxid, sender.mxid
                     )
                     await self.main_intent.redact(self.mxid, message_with_reaction.event_mxid)
 
-                try:
-                    has_been_sent = await self.main_intent.react(
-                        self.mxid,
-                        msg.mxid,
-                        data_reaction.emoji,
-                    )
-                except Exception as e:
-                    self.log.exception(f"Error sending reaction: {e}")
-                    await self.main_intent.send_notice(self.mxid, "Error sending reaction")
-                    return
+            try:
+                has_been_sent = await self.main_intent.react(
+                    self.mxid,
+                    msg.mxid,
+                    data_reaction.emoji,
+                )
+            except Exception as e:
+                self.log.exception(f"Error sending reaction: {e}")
+                await self.main_intent.send_notice(self.mxid, "Error sending reaction")
+                return
 
         else:
             self.log.error(f"Message id not found, mid: {msg_id}")
@@ -723,8 +718,7 @@ class Portal(DBPortal, BasePortal):
             return
         except Exception as e:
             self.log.error(f"Error sending reaction: {e}")
-            self.log.exception(f"Error sending reaction: {e}")
-            await self.main_intent.send_notice("Error sending reaction")
+            await self.main_intent.send_notice(f"Error sending reaction: {e}")
             return
 
         await DBReaction(

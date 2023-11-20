@@ -15,7 +15,7 @@ class GupshupClient:
 
     def __init__(self, config: Config, loop: asyncio.AbstractEventLoop) -> None:
         self.base_url = config["gupshup.base_url"]
-        self.reaction_url = config["gupshup.reaction_url"]
+        self.cloud_api_url = config["gupshup.cloud_api_url"]
         self.app_name = config["gupshup.app_name"]
         self.sender = config["gupshup.sender"]
         self.http = ClientSession(loop=loop)
@@ -80,6 +80,6 @@ class GupshupClient:
         data.pop("headers")
         data["message"] = json.dumps({"msgId": message_id, "type": type, "emoji": emoji})
 
-        resp = await self.http.post(self.reaction_url, data=data, headers=headers)
+        resp = await self.http.post(self.cloud_api_url, data=data, headers=headers)
         response_data = json.loads(await resp.text())
         return response_data
