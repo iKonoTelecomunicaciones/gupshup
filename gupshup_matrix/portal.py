@@ -466,19 +466,14 @@ class Portal(DBPortal, BasePortal):
             )
 
             if message_with_reaction:
+                await DBReaction.delete_by_event_mxid(
+                    message_with_reaction.event_mxid, self.mxid, sender.mxid
+                )
+                has_been_sent = await self.main_intent.redact(
+                    self.mxid, message_with_reaction.event_mxid
+                )
                 if not data_reaction.emoji:
-                    await DBReaction.delete_by_event_mxid(
-                        message_with_reaction.event_mxid, self.mxid, sender.mxid
-                    )
-                    has_been_sent = await self.main_intent.redact(
-                        self.mxid, message_with_reaction.event_mxid
-                    )
                     return
-                else:
-                    await DBReaction.delete_by_event_mxid(
-                        message_with_reaction.event_mxid, self.mxid, sender.mxid
-                    )
-                    await self.main_intent.redact(self.mxid, message_with_reaction.event_mxid)
 
             try:
                 has_been_sent = await self.main_intent.react(
