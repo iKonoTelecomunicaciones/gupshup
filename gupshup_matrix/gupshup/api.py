@@ -7,7 +7,8 @@ from aiohttp import ClientConnectorError, ClientSession
 from mautrix.types import MessageType
 
 from ..config import Config
-from .data import GupshupUserID
+from ..db import GupshupApplication as DBGupshupApplication
+from .data import GupshupMessageID
 
 
 class GupshupClient:
@@ -16,6 +17,7 @@ class GupshupClient:
 
     def __init__(self, config: Config, loop: asyncio.AbstractEventLoop) -> None:
         self.base_url = config["gupshup.base_url"]
+        self.read_url = config["gupshup.read_url"]
         self.cloud_url = config["gupshup.cloud_url"]
         self.is_cloud = config["gupshup.is_cloud"]
         self.app_name = config["gupshup.app_name"]
@@ -122,6 +124,45 @@ class GupshupClient:
 
         response_data = json.loads(await resp.text())
         return response_data
+
+    async def mark_read(self, message_id: GupshupMessageID, gupshup_app: DBGupshupApplication):
+        """
+         Send a request to gupshup to mark the message as read.
+
+         Parameters
+         ----------
+         message_id : str
+             The id of the message.
+        gupshup_app: DBGupshupApplication
+             The gupshup application that will be used to send the read event.
+
+         Exceptions
+         ----------
+         ValueError:
+             If the read event was not sent.
+        """
+        if not gupshup_app:
+            self.log.error("No gupshup_app, ignoring read")
+            return
+
+        # Set the headers to send the read event to Gupshup
+        header = {
+            "apikey": gupshup_app.api_key,
+            "Content-Type": "application/json",
+        }
+
+        self.log.debug(f"Marking message {message_id} as read")
+        # Set the url to send the read event to Gupshup
+        mark_read_url = self.read_url.format(appId=gupshup_app.app_id, msgId=message_id)
+
+        # Send the read event to the Gupshup
+        response = await self.http.put(url=mark_read_url, headers=header)
+
+        if response.status not in (200, 202):
+            self.log.error(f"Trying to mark the message {message_id} as read failed: {response}")
+            raise ValueError("Try to mark the message as read failed")
+        else:
+            self.log.debug(f"Message {message_id} marked as read")
 
     async def send_location(
         self, data: dict, data_location: dict, additional_data: Optional[dict] = {}
