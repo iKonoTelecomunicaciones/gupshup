@@ -17,6 +17,7 @@ from mautrix.types import (
     Format,
     MessageType,
     PowerLevelStateEventContent,
+    ReactionEventContent,
     RoomID,
     UserID,
 )
@@ -35,6 +36,7 @@ from . import user as u
 from .db import GupshupApplication as DBGupshupApplication
 from .db import Message as DBMessage
 from .db import Portal as DBPortal
+from .db import Reaction as DBReaction
 from .formatter import whatsapp_reply_to_matrix, whatsapp_to_matrix
 from .gupshup import (
     GupshupClient,
@@ -287,12 +289,23 @@ class Portal(DBPortal, BasePortal):
     async def handle_gupshup_message(
         self, source: u.User, info: ChatInfo, message: GupshupMessageEvent
     ) -> None:
+        """
+        Send a message to element and create a room if it doesn't exist.
+
+        Parameters
+        ----------
+        source: User
+            The user who sent the reaction
+        info: ChatInfo
+            The information of the user who sent the message
+        message: GupshupMessageEvent
+            The content of the reaction event
+        """
         if not await self.create_matrix_room(source=source, info=info):
             return
 
         mxid = None
         msgtype = MessageType.TEXT
-
         if message.payload.body.url:
             resp = await self.az.http_session.get(message.payload.body.url)
             data = await resp.read()
@@ -439,6 +452,63 @@ class Portal(DBPortal, BasePortal):
                 if msg:
                     await self.main_intent.react(self.mxid, msg.mxid, "\u274c")
                 await self.main_intent.send_notice(self.mxid, None, html=reason_es)
+
+    async def handle_gupshup_reaction(self, sender: u.User, message: GupshupMessageEvent):
+        """
+        Send a reaction to element.
+
+        Parameters
+        ----------
+        sender: User
+            The user who sent the reaction
+        message: GupshupMessageEvent
+            The content with the reaction event
+        """
+        if not self.mxid:
+            return
+
+        data_reaction = message.payload.body
+        msg_id = data_reaction.msg_gsId if data_reaction.msg_gsId else data_reaction.msg_id
+        msg: DBMessage = await DBMessage.get_by_gsid(gsid=msg_id)
+        if msg:
+            message_with_reaction: DBReaction = await DBReaction.get_by_gs_message_id(
+                msg.gsid, sender.mxid
+            )
+
+            if message_with_reaction:
+                await DBReaction.delete_by_event_mxid(
+                    message_with_reaction.event_mxid, self.mxid, sender.mxid
+                )
+                has_been_sent = await self.main_intent.redact(
+                    self.mxid, message_with_reaction.event_mxid
+                )
+                if not data_reaction.emoji:
+                    return
+
+            try:
+                has_been_sent = await self.main_intent.react(
+                    self.mxid,
+                    msg.mxid,
+                    data_reaction.emoji,
+                )
+            except Exception as e:
+                self.log.exception(f"Error sending reaction: {e}")
+                await self.main_intent.send_notice(self.mxid, "Error sending reaction")
+                return
+
+        else:
+            self.log.error(f"Message id not found, mid: {msg_id}")
+            await self.main_intent.send_notice(self.mxid, "Error sending reaction")
+            return
+
+        await DBReaction(
+            event_mxid=has_been_sent,
+            room_id=self.mxid,
+            sender=sender.mxid,
+            gs_message_id=msg.gsid,
+            reaction=data_reaction.emoji,
+            created_at=datetime.now(),
+        ).insert()
 
     async def handle_matrix_message(
         self,
@@ -640,3 +710,111 @@ class Portal(DBPortal, BasePortal):
         except ValueError as error:
             self.log.error(f"Read event error for event_id {event_id}: {error}")
             return
+
+    async def handle_matrix_reaction(
+        self,
+        user: u.User,
+        message_mxid: str,
+        event_id: EventID,
+        room_id: RoomID,
+        content: ReactionEventContent,
+    ):
+        """
+        Send a reaction to whatsapp
+
+        Parameters
+        ----------
+        user: User
+            The user who sent the reaction
+        message_mxid: str
+            The message ID of the reaction event
+        event_id: EventID
+            The event ID of the reaction event
+        room_id: RoomID
+            The room ID of the room where the reaction was sent
+        content: Dict
+            The content of the reaction event
+        """
+        message: DBMessage = await DBMessage.get_by_mxid(message_mxid, room_id)
+
+        if not message:
+            self.log.error(f"Message {message_mxid} not found when handling reaction")
+            await self.main_intent.send_notice(
+                self.mxid, "We couldn't find the message to react to"
+            )
+            return
+
+        reaction_value = content.relates_to.key
+        message_with_reaction = await DBReaction.get_by_gs_message_id(message.gsid, user.mxid)
+        data = await self.main_data_gs
+        if message_with_reaction:
+            await DBReaction.delete_by_event_mxid(
+                message_with_reaction.event_mxid, self.mxid, user.mxid
+            )
+            await self.main_intent.redact(self.mxid, message_with_reaction.event_mxid)
+
+        try:
+            await self.gsc.send_reaction(
+                message_id=message.gsid,
+                emoji=reaction_value,
+                type="reaction",
+                data=data,
+            )
+        except ClientConnectorError as e:
+            self.log.error(e)
+            await self.main_intent.send_notice(f"Error sending reaction: {e}")
+            return
+        except TypeError as e:
+            self.log.error(e)
+            await self.main_intent.send_notice(f"Error sending reaction: {e}")
+            return
+        except Exception as e:
+            self.log.error(f"Error sending reaction: {e}")
+            await self.main_intent.send_notice(f"Error sending reaction: {e}")
+            return
+
+        await DBReaction(
+            event_mxid=event_id,
+            room_id=self.mxid,
+            sender=user.mxid,
+            gs_message_id=message.gsid,
+            reaction=reaction_value,
+            created_at=datetime.now(),
+        ).insert()
+
+    async def handle_matrix_redaction(
+        self,
+        user: u.User,
+        event_id: EventID,
+    ) -> None:
+        """
+        When a user of Matrix redaction to a message, this function takes it and sends it to Gupshup
+
+        Parameters
+        ----------
+        user : User
+            The user who sent the redaction
+
+        event_id:
+            The event_id of the reaction that was redacted
+        """
+        self.log.debug(f"Handling redaction for {event_id}")
+        data = await self.main_data_gs
+        message: DBReaction = await DBReaction.get_by_event_mxid(event_id, self.mxid)
+
+        if not message:
+            self.log.error(f"Message {event_id} not found when handling redaction")
+            await self.main_intent.send_notice(
+                self.mxid, "We couldn't find the message when handling redaction"
+            )
+            return
+
+        try:
+            await self.gsc.send_reaction(
+                message_id=message.gs_message_id, emoji="", type="reaction", data=data
+            )
+        except Exception as e:
+            self.log.exception(f"Error sending reaction: {e}")
+            return
+
+        await DBReaction.delete_by_event_mxid(message.event_mxid, self.mxid, user.mxid)

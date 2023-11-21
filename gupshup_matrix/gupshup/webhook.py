@@ -65,7 +65,6 @@ class GupshupHandler:
                 f"Ignoring event because the gs_app [{data.get('app')}] is not registered."
             )
             return web.Response(status=406)
-
         if data.get("type") == GupshupEventType.MESSAGE:
             return await self.message_event(data)
         elif data.get("type") == GupshupEventType.MESSAGE_EVENT:
@@ -110,7 +109,10 @@ class GupshupHandler:
         user: u.User = await u.User.get_by_gs_app(data.app)
         info = ChatInfo.deserialize(data.__dict__)
         info.sender = data.payload.sender
-        await portal.handle_gupshup_message(user, info, data)
+        if data.payload.type == "reaction":
+            await portal.handle_gupshup_reaction(user, data)
+        else:
+            await portal.handle_gupshup_message(user, info, data)
         return web.Response(status=204)
 
     async def status_event(self, data: GupshupStatusEvent) -> web.Response:

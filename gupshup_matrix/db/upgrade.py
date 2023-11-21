@@ -62,3 +62,23 @@ async def upgrade_v1(conn: Connection) -> None:
 @upgrade_table.register(description="Add field encrypted to portal table")
 async def upgrade_v2(conn: Connection) -> None:
     await conn.execute("ALTER TABLE portal ADD COLUMN encrypted BOOLEAN DEFAULT false")
+
+
+@upgrade_table.register(description="Add reaction table to store reactions")
+async def upgrade_v3(conn: Connection) -> None:
+    await conn.execute(
+        """CREATE TABLE reaction (
+        event_mxid      VARCHAR(255) PRIMARY KEY,
+        room_id         VARCHAR(255) NOT NULL,
+        sender          VARCHAR(255) NOT NULL,
+        gs_message_id   TEXT NOT NULL,
+        reaction        VARCHAR(255),
+        created_at      TIMESTAMP WITH TIME ZONE NOT NULL
+    )"""
+    )
+    await conn.execute("ALTER TABLE message ADD CONSTRAINT unique_gsid UNIQUE (gsid);")
+    await conn.execute(
+        """ALTER TABLE reaction ADD CONSTRAINT FK_message_gsid
+        FOREIGN KEY (gs_message_id) references message (gsid)
+        ON DELETE CASCADE"""
+    )
