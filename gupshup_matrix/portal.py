@@ -15,14 +15,17 @@ from mautrix.types import (
     EventType,
     FileInfo,
     Format,
-    MediaMessageEventContent,
-    MessageEventContent,
     MessageType,
     PowerLevelStateEventContent,
     ReactionEventContent,
     RoomID,
-    TextMessageEventContent,
     UserID,
+)
+from mautrix.types.event import (
+    LocationMessageEventContent,
+    MediaMessageEventContent,
+    MessageEventContent,
+    TextMessageEventContent,
 )
 
 from gupshup_matrix.formatter.from_matrix import matrix_to_whatsapp
@@ -57,7 +60,6 @@ class Portal(DBPortal, BasePortal):
     by_chat_id: Dict[RoomID, "Portal"] = {}
     by_chat_id: Dict[str, "Portal"] = {}
 
-    google_maps_url: str
     message_template: Template
     federate_rooms: bool
     invite_users: List[UserID]
@@ -325,8 +327,8 @@ class Portal(DBPortal, BasePortal):
                 content_image = MediaMessageEventContent(
                     body="", msgtype=msgtype, url=mxc, info=FileInfo(size=len(data))
                 )
-                mxid = await self.main_intent.send_message(self.mxid, content_image)
-                await self.send_text_message(msgbody)
+                await self.main_intent.send_message(self.mxid, content_image)
+                mxid = await self.send_text_message(msgbody)
 
             elif message.payload.type in ("audio", "file"):
                 msgtype = (
@@ -393,12 +395,20 @@ class Portal(DBPortal, BasePortal):
                 mxid = await self.main_intent.send_message(self.mxid, content)
 
         if message.payload.type == "location":
-            text = ""
-            location = self.google_maps_url.replace(
-                "{latitude}", message.payload.body.latitude
-            ).replace("{longitude}", message.payload.body.longitude)
-            text += location
-            mxid = await self.send_text_message(text)
+            # Get the latitude and longitude
+            latitude = float(message.payload.body.latitude)
+            longitude = float(message.payload.body.longitude)
+
+            # Set the location message content and send it to Gupshup
+            # The geo_uri is the way to send a location in Matrix
+            location_message = LocationMessageEventContent(
+                msgtype=MessageType.LOCATION,
+                body=f"{message.payload.body.name} {message.payload.body.address}",
+                geo_uri=f"geo:{latitude},{longitude}",
+            )
+            # Send the message to Matrix
+            self.log.debug(f"Sending location message {location_message} to {self.mxid}")
+            mxid = await self.main_intent.send_message(room_id=self.mxid, content=location_message)
 
         if not mxid:
             mxid = await self.main_intent.send_notice(self.mxid, "Contenido no aceptado")
@@ -559,9 +569,15 @@ class Portal(DBPortal, BasePortal):
             )
         elif message.msgtype == MessageType.LOCATION:
             resp = await self.gsc.send_location(
-                self.phone, body=message.body, additional_data=additional_data
+                data=await self.main_data_gs, data_location=message
             )
-
+            if resp.get("status", "") not in (200, 201, 202):
+                self.log.error(f"Error sending location: {resp}")
+                await self.main_intent.send_notice(
+                    room_id=self.mxid,
+                    html=f"<h4>{resp.get('message')}</h4>",
+                )
+                return
         else:
             self.log.debug(f"Ignoring unknown message {message}")
             return
@@ -653,6 +669,47 @@ class Portal(DBPortal, BasePortal):
             gsid=GupshupMessageID(resp.get("messageId")),
             gs_app=self.gs_app,
         ).insert()
+
+    async def handle_matrix_read_receipt(self, event_id: str) -> None:
+        """
+        Send a read event to Gupshup
+
+        Params
+        ----------
+        event_id : str
+            The id of the event.
+
+        Exceptions
+        ----------
+        ClientConnectorError:
+            Show and error if the connection fails.
+
+        ValueError:
+            Show and error if the read event is not sent.
+        """
+        puppet: p.Puppet = await p.Puppet.get_by_phone(self.phone, create=False)
+        gupshup_app: DBGupshupApplication = await DBGupshupApplication.get_by_admin_user(
+            self.relay_user_id
+        )
+
+        if not puppet:
+            self.log.error("No puppet, ignoring read")
+            return
+
+        message: DBMessage = await DBMessage.get_by_mxid(event_id, self.mxid)
+        if not message:
+            self.log.error(f"No message with mxid: {event_id}, ignoring read")
+            return
+
+        # We send the read event to Gupshup
+        try:
+            await self.gsc.mark_read(message_id=message.gsid, gupshup_app=gupshup_app)
+        except ClientConnectorError as error:
+            self.log.error(f"Error sending the read event for event_id {event_id}: {error}")
+            return
+        except ValueError as error:
+            self.log.error(f"Read event error for event_id {event_id}: {error}")
+            return
 
     async def handle_matrix_reaction(
         self,

@@ -11,6 +11,7 @@ from mautrix.types import (
     ReactionEventContent,
     RedactionEvent,
     RoomID,
+    SingleReceiptEventContent,
     UserID,
 )
 
@@ -103,6 +104,12 @@ class MatrixHandler(BaseMatrixHandler):
 
     async def allow_bridging_message(self, user: u.User, portal: po.Portal) -> bool:
         return portal.has_relay or await user.is_logged_in()
+
+    async def handle_read_receipt(
+        self, user: u.User, portal: po.Portal, event_id: EventID, data: SingleReceiptEventContent
+    ) -> None:
+        self.log.debug(f"Got read receipt for {event_id} from {user.mxid}")
+        await portal.handle_matrix_read_receipt(event_id)
 
     async def handle_reaction(
         self,

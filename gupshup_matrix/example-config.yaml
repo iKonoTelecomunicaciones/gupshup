@@ -65,15 +65,14 @@ bridge:
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!gs"
 
-    # Google maps URL.
-    # {latitude} and {longitude} is replaced with valid values.
-    google_maps_url: https://www.google.com/maps?q={latitude},{longitude}
-
     # Whether or not Matrix m.notice-type messages should be bridged.
     bridge_notices: false
     # Whether or not created rooms should have federation enabled.
     # If false, created portal rooms will never be federated.
     federate_rooms: true
+    # Whether or not to use /sync to get read receipts and typing notifications
+    # when double puppeting is enabled
+    sync_with_custom_puppets: false
 
     # Provisioning API part of the web server for automated portal creation and fetching information.
     # Used by things like mautrix-manager (https://github.com/tulir/mautrix-manager).
@@ -124,6 +123,7 @@ bridge:
 gupshup:
     # Gupsghup base URL
     base_url: https://api.gupshup.io/sm/api/v1/msg
+    read_url: https://api.gupshup.io/wa/app/{appId}/msg/{msgId}/read
     # Gupshup reaction URL
     cloud_api_url: https://api.gupshup.io/wa/api/v1/msg
     # Path prefix for webhook endpoints. Subpaths are /status and /receive.
