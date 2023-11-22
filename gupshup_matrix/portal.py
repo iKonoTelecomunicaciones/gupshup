@@ -18,6 +18,8 @@ from mautrix.types import (
     MessageType,
     PowerLevelStateEventContent,
     ReactionEventContent,
+    RelatesTo,
+    RelationType,
     RoomID,
     UserID,
 )
@@ -37,7 +39,7 @@ from .db import GupshupApplication as DBGupshupApplication
 from .db import Message as DBMessage
 from .db import Portal as DBPortal
 from .db import Reaction as DBReaction
-from .formatter import whatsapp_reply_to_matrix, whatsapp_to_matrix
+from .formatter import _add_reply_header, whatsapp_reply_to_matrix, whatsapp_to_matrix
 from .gupshup import (
     GupshupClient,
     GupshupMessageEvent,
@@ -306,6 +308,21 @@ class Portal(DBPortal, BasePortal):
 
         mxid = None
         msgtype = MessageType.TEXT
+        evt = None
+        if message.payload.context:
+            # Depending on where the message comes from, the id is different, if it comes from
+            # Matrix, the id is a Gupshup id (it is happend because Gupshup use an id for the
+            # message that does not come from Whatsapp Api Cloud),
+            # otherwise is a Whatsapp Cloud id.
+            if message.payload.context.msg_gsId:
+                mgs_id = message.payload.context.msg_gsId
+            else:
+                mgs_id = message.payload.context.msg_id
+
+            body = message.payload.body.text
+
+            evt = await DBMessage.get_by_gsid(gsid=mgs_id)
+
         if message.payload.body.url:
             resp = await self.az.http_session.get(message.payload.body.url)
             data = await resp.read()
@@ -327,8 +344,14 @@ class Portal(DBPortal, BasePortal):
                 content_image = MediaMessageEventContent(
                     body="", msgtype=msgtype, url=mxc, info=FileInfo(size=len(data))
                 )
-                await self.main_intent.send_message(self.mxid, content_image)
-                mxid = await self.send_text_message(msgbody)
+
+                if evt:
+                    await _add_reply_header(
+                        content=content_image, msg=evt, main_intent=self.main_intent, log=self.log
+                    )
+
+                mxid = await self.main_intent.send_message(self.mxid, content_image)
+                await self.send_text_message(msgbody)
 
             elif message.payload.type in ("audio", "file"):
                 msgtype = (
@@ -342,6 +365,12 @@ class Portal(DBPortal, BasePortal):
                     url=mxc,
                     info=FileInfo(size=len(data)),
                 )
+
+                if evt:
+                    await _add_reply_header(
+                        content=content, msg=evt, main_intent=self.main_intent, log=self.log
+                    )
+
                 mxid = await self.main_intent.send_message(self.mxid, content)
 
             elif message.payload.type == "sticker":
@@ -363,8 +392,12 @@ class Portal(DBPortal, BasePortal):
                     message_data += "</div>"
                     mxid = await self.send_text_message(message_data)
 
-        elif message.payload.type == "text" and not message.payload.context:
-            mxid = await self.send_text_message(message.payload.body.text)
+        elif message.payload.type == "text":
+            if evt:
+                content = await whatsapp_reply_to_matrix(body, evt, self.main_intent, self.log)
+                mxid = await self.main_intent.send_message(self.mxid, content)
+            else:
+                mxid = await self.send_text_message(message.payload.body.text)
 
         elif message.payload.type in ["button_reply", "list_reply"]:
             if message.payload.type == "button_reply":
@@ -379,21 +412,6 @@ class Portal(DBPortal, BasePortal):
 
             mxid = await self.send_text_message(body)
 
-        # A esta opción se ingresa cuando es un mensaje que responde a un mensaje previo
-        elif message.payload.context and message.payload.body.text:
-            if message.payload.context.msg_gsId:
-                mgs_id = message.payload.context.msg_gsId
-            else:
-                mgs_id = message.payload.context.msg_id
-
-            body = message.payload.body.text
-
-            evt = await DBMessage.get_by_gsid(gsid=mgs_id)
-            if evt:
-                content = await whatsapp_reply_to_matrix(body, evt, self.main_intent, self.log)
-                content.external_url = content.external_url
-                mxid = await self.main_intent.send_message(self.mxid, content)
-
         if message.payload.type == "location":
             # Get the latitude and longitude
             latitude = float(message.payload.body.latitude)
@@ -406,6 +424,12 @@ class Portal(DBPortal, BasePortal):
                 body=f"{message.payload.body.name} {message.payload.body.address}",
                 geo_uri=f"geo:{latitude},{longitude}",
             )
+
+            if evt:
+                await _add_reply_header(
+                    content=location_message, msg=evt, main_intent=self.main_intent, log=self.log
+                )
+
             # Send the message to Matrix
             self.log.debug(f"Sending location message {location_message} to {self.mxid}")
             mxid = await self.main_intent.send_message(room_id=self.mxid, content=location_message)
@@ -516,7 +540,7 @@ class Portal(DBPortal, BasePortal):
         message: MessageEventContent,
         event_id: EventID,
         is_gupshup_template: bool = False,
-        additional_data: Optional[dict] = None,
+        additional_data: Optional[dict] = {},
     ) -> None:
         if message.msgtype == "m.interactive_message":
             interactive_message = message.get("interactive_message", {}).serialize()
@@ -532,9 +556,14 @@ class Portal(DBPortal, BasePortal):
         sender, is_relay = await self.get_relay_sender(sender, f"message {event_id}")
         if is_relay:
             await self.apply_relay_message_format(orig_sender, message)
-
         if message.get_reply_to():
-            await DBMessage.get_by_mxid(message.get_reply_to(), self.mxid)
+            reply_message = await DBMessage.get_by_mxid(message.get_reply_to(), self.mxid)
+            if reply_message:
+                additional_data = {
+                    "context": {
+                        "msgId": reply_message.gsid,
+                    }
+                }
 
         if message.msgtype == MessageType.NOTICE and not self.config["bridge.bridge_notices"]:
             return
@@ -545,17 +574,12 @@ class Portal(DBPortal, BasePortal):
             else:
                 text = text = message.body
 
-            if additional_data:
-                resp = await self.gsc.send_message(
-                    data=await self.main_data_gs,
-                    additional_data=additional_data,
-                )
-            else:
-                resp = await self.gsc.send_message(
-                    data=await self.main_data_gs,
-                    body=text,
-                    is_gupshup_template=is_gupshup_template,
-                )
+            resp = await self.gsc.send_message(
+                data=await self.main_data_gs,
+                body=text,
+                is_gupshup_template=is_gupshup_template,
+                additional_data=additional_data,
+            )
 
         elif message.msgtype in (
             MessageType.AUDIO,
@@ -565,11 +589,17 @@ class Portal(DBPortal, BasePortal):
         ):
             url = f"{self.homeserver_address}/_matrix/media/r0/download/{message.url[6:]}"
             resp = await self.gsc.send_message(
-                data=await self.main_data_gs, media=url, body=message.body, msgtype=message.msgtype
+                data=await self.main_data_gs,
+                media=url,
+                body=message.body,
+                msgtype=message.msgtype,
+                additional_data=additional_data,
             )
         elif message.msgtype == MessageType.LOCATION:
             resp = await self.gsc.send_location(
-                data=await self.main_data_gs, data_location=message
+                data=await self.main_data_gs,
+                data_location=message,
+                additional_data=additional_data,
             )
             if resp.get("status", "") not in (200, 201, 202):
                 self.log.error(f"Error sending location: {resp}")
@@ -660,6 +690,7 @@ class Portal(DBPortal, BasePortal):
         resp = await self.gsc.send_message(
             data=await self.main_data_gs,
             additional_data=interactive_message.serialize(),
+            msgtype="m.interactive_message",
         )
 
         await DBMessage(
@@ -669,47 +700,6 @@ class Portal(DBPortal, BasePortal):
             gsid=GupshupMessageID(resp.get("messageId")),
             gs_app=self.gs_app,
         ).insert()
-
-    async def handle_matrix_read_receipt(self, event_id: str) -> None:
-        """
-        Send a read event to Gupshup
-
-        Params
-        ----------
-        event_id : str
-            The id of the event.
-
-        Exceptions
-        ----------
-        ClientConnectorError:
-            Show and error if the connection fails.
-
-        ValueError:
-            Show and error if the read event is not sent.
-        """
-        puppet: p.Puppet = await p.Puppet.get_by_phone(self.phone, create=False)
-        gupshup_app: DBGupshupApplication = await DBGupshupApplication.get_by_admin_user(
-            self.relay_user_id
-        )
-
-        if not puppet:
-            self.log.error("No puppet, ignoring read")
-            return
-
-        message: DBMessage = await DBMessage.get_by_mxid(event_id, self.mxid)
-        if not message:
-            self.log.error(f"No message with mxid: {event_id}, ignoring read")
-            return
-
-        # We send the read event to Gupshup
-        try:
-            await self.gsc.mark_read(message_id=message.gsid, gupshup_app=gupshup_app)
-        except ClientConnectorError as error:
-            self.log.error(f"Error sending the read event for event_id {event_id}: {error}")
-            return
-        except ValueError as error:
-            self.log.error(f"Read event error for event_id {event_id}: {error}")
-            return
 
     async def handle_matrix_reaction(
         self,
