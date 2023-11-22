@@ -47,6 +47,7 @@ class GupshupMessageData(SerializableAttrs):
     msg_gsId: str = attr.ib(default=None, metadata={"json": "gsId"})
     name: str = attr.ib(default=None, metadata={"json": "name"})
     address: str = attr.ib(default=None, metadata={"json": "address"})
+    emoji: str = attr.ib(default=None, metadata={"json": "emoji"})
 
 
 @dataclass

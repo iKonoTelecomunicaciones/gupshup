@@ -16,6 +16,8 @@ class GupshupClient:
 
     def __init__(self, config: Config, loop: asyncio.AbstractEventLoop) -> None:
         self.base_url = config["gupshup.base_url"]
+        self.read_url = config["gupshup.read_url"]
+        self.cloud_api_url = config["gupshup.cloud_api_url"]
         self.cloud_url = config["gupshup.cloud_url"]
         self.is_cloud = config["gupshup.is_cloud"]
         self.app_name = config["gupshup.app_name"]
@@ -179,3 +181,26 @@ class GupshupClient:
 
         response_data = json.loads(await resp.text())
         return {"status": resp.status, "messageId": response_data.get("messageId")}
+
+    async def send_reaction(self, message_id: str, emoji: str, type: str, data: dict):
+        """
+        Send a reaction to whatsapp
+
+        Parameters
+        ----------
+        message_id: str
+            The message ID of the reaction event
+        emoji: str
+            The emoji that was reacted with
+        type: str
+            The type of the reaction event
+        data: dict
+            The necessary data to send the reaction
+        """
+        headers = data.get("headers")
+        data.pop("headers")
+        data["message"] = json.dumps({"msgId": message_id, "type": type, "emoji": emoji})
+
+        resp = await self.http.post(self.cloud_api_url, data=data, headers=headers)
+        response_data = json.loads(await resp.text())
+        return response_data
