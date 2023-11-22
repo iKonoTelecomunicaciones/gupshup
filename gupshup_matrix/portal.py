@@ -17,9 +17,9 @@ from mautrix.types import (
     Format,
     MessageType,
     PowerLevelStateEventContent,
+    ReactionEventContent,
     RelatesTo,
     RelationType,
-    ReactionEventContent,
     RoomID,
     UserID,
 )
