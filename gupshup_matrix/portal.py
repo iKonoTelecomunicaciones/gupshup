@@ -445,7 +445,11 @@ class Portal(DBPortal, BasePortal):
             gsid=message.payload.id,
             gs_app=message.app,
         )
-        await msg.insert()
+        try:
+            await msg.insert()
+        except Exception as e:
+            self.log.error(f"Error saving message {msg}: {e}")
+
         asyncio.create_task(puppet.update_info(info))
 
     async def handle_matrix_join(self, user: u.User) -> None:
