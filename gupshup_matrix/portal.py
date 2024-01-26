@@ -236,7 +236,7 @@ class Portal(DBPortal, BasePortal):
         levels = levels or PowerLevelStateEventContent()
         default_power_levels = self.config["bridge.default_power_levels"]
         default_events_levels = self.config["bridge.default_events_levels"]
-        default_user_levels = self.config["bridge.default_user_levels"]
+        default_user_level = self.config["bridge.default_user_level"]
 
         for key, value in default_power_levels.items():
             setattr(levels, key, value)
@@ -245,7 +245,7 @@ class Portal(DBPortal, BasePortal):
             levels.events[getattr(EventType, key)] = value
 
         if self.main_intent.mxid not in levels.users:
-            levels.users[self.main_intent.mxid] = default_user_levels if is_initial else 100
+            levels.users[self.main_intent.mxid] = default_user_level if is_initial else 100
 
         return levels
 

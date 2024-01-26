@@ -53,7 +53,7 @@ appservice:
 # Bridge config
 bridge:
     # The power levels of the user
-    default_user_levels: 9001
+    default_user_level: 9001
     # default power levels of the room
     default_power_levels:
         events_default: 0
@@ -69,8 +69,8 @@ bridge:
         ROOM_NAME: 0
         ROOM_AVATAR: 0
         ROOM_TOPIC: 0
-        ROOM_ENCRYPTION: 0
-        ROOM_TOMBSTONE: 0
+        ROOM_ENCRYPTION: 99
+        ROOM_TOMBSTONE: 99
 
     # Localpart template of MXIDs for remote users.
     # {userid} is replaced with the phone number of the user (plain/E.164 international format).
