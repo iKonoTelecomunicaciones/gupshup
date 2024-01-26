@@ -26,6 +26,9 @@ class Config(BaseBridgeConfig):
 
         copy("appservice.community_id")
 
+        copy("bridge.default_user_levels")
+        copy_dict("bridge.default_power_levels")
+        copy_dict("bridge.default_events_levels")
         copy("bridge.username_template")
         copy("bridge.displayname_template")
         copy("bridge.room_name_template")
