@@ -234,23 +234,19 @@ class Portal(DBPortal, BasePortal):
         self, levels: PowerLevelStateEventContent | None = None, is_initial: bool = False
     ) -> PowerLevelStateEventContent:
         levels = levels or PowerLevelStateEventContent()
-        levels.events_default = 0
-        levels.ban = 99
-        levels.kick = 99
-        levels.invite = 99
-        levels.state_default = 0
-        meta_edit_level = 0
-        levels.events[EventType.REACTION] = 0
-        levels.events[EventType.ROOM_NAME] = meta_edit_level
-        levels.events[EventType.ROOM_AVATAR] = meta_edit_level
-        levels.events[EventType.ROOM_TOPIC] = meta_edit_level
-        levels.events[EventType.ROOM_ENCRYPTION] = 50 if self.matrix.e2ee else 99
-        levels.events[EventType.ROOM_TOMBSTONE] = 99
-        levels.users_default = 0
-        # Remote delete is only for your own messages
-        levels.redact = 99
+        default_power_levels = self.config["bridge.default_power_levels"]
+        default_events_levels = self.config["bridge.default_events_levels"]
+        default_user_level = self.config["bridge.default_user_level"]
+
+        for key, value in default_power_levels.items():
+            setattr(levels, key, value)
+
+        for key, value in default_events_levels.items():
+            levels.events[getattr(EventType, key)] = value
+
         if self.main_intent.mxid not in levels.users:
-            levels.users[self.main_intent.mxid] = 9001 if is_initial else 100
+            levels.users[self.main_intent.mxid] = default_user_level if is_initial else 100
+
         return levels
 
     @property
