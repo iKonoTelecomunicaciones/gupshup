@@ -440,7 +440,7 @@ class ProvisioningAPI:
                     {
                         "detail": {
                             "data": None,
-                            "message": f"""The meta application with user {user.mxid}
+                            "message": f"""The gupshup application with user {user.mxid}
                                         is not registered""",
                         }
                     }
