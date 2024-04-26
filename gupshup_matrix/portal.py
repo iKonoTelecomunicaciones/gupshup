@@ -209,6 +209,14 @@ class Portal(DBPortal, BasePortal):
             self.mxid, source.mxid, extra_content=self._get_invite_content(puppet)
         )
 
+        for attempt in range(10):
+            self.log.debug(f"Attempt {attempt} to set power levels to {source.mxid} logged user")
+            response = await self.set_member_power_level(source.mxid, 100)
+            if response:
+                break
+            await asyncio.sleep(1)
+        await self.set_relay_user(source)
+
         return self.mxid
 
     async def handle_matrix_leave(self, user: u.User) -> None:
@@ -846,3 +854,46 @@ class Portal(DBPortal, BasePortal):
             return
 
         await DBReaction.delete_by_event_mxid(message.event_mxid, self.mxid, user.mxid)
+
+    async def get_joined_users(self) -> List[UserID] | None:
+        """get a list of all users in the room
+
+        Returns
+        -------
+            A list of User objects.
+
+        """
+        try:
+            members = await self.main_intent.get_joined_members(room_id=self.mxid)
+        except Exception as e:
+            self.log.error(e)
+            return
+
+        return members.keys()
+
+    async def set_member_power_level(self, member: UserID, power_level: int) -> None:
+        """It sets the power level of a member in the room
+
+        Parameters
+        ----------
+        member : User
+            The user ID of the member.
+        power_level : int
+            The power level of the member.
+
+        """
+        room_members = await self.get_joined_users()
+        if member not in room_members:
+            self.log.warning(
+                f"Unable to set power level for {member} in {self.mxid}, user not in room"
+            )
+            return False
+
+        portal_pl = await self.main_intent.get_power_levels(room_id=self.mxid)
+        portal_pl.users[member] = power_level
+        await self.main_intent.set_power_levels(
+            room_id=self.mxid,
+            content=portal_pl,
+        )
+
+        return True
