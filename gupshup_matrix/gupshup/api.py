@@ -18,8 +18,6 @@ class GupshupClient:
     def __init__(self, config: Config, loop: asyncio.AbstractEventLoop) -> None:
         self.base_url = config["gupshup.base_url"]
         self.read_url = config["gupshup.read_url"]
-        self.cloud_url = config["gupshup.cloud_url"]
-        self.is_cloud = config["gupshup.is_cloud"]
         self.app_name = config["gupshup.app_name"]
         self.sender = config["gupshup.sender"]
         self.http = ClientSession(loop=loop)
@@ -57,8 +55,7 @@ class GupshupClient:
         ClientConnectorError:
             Show and error if the connection fails.
         """
-        headers = data.get("headers")
-        data.pop("headers")
+        headers = data.pop("headers")
 
         if body and msgtype is None and not is_gupshup_template:
             data["message"] = json.dumps(
@@ -115,10 +112,7 @@ class GupshupClient:
         self.log.debug(f"Sending message {data}")
 
         try:
-            if additional_data.get("context", {}) and self.is_cloud:
-                resp = await self.http.post(self.cloud_url, data=data, headers=headers)
-            else:
-                resp = await self.http.post(self.base_url, data=data, headers=headers)
+            resp = await self.http.post(self.base_url, data=data, headers=headers)
         except ClientConnectorError as e:
             self.log.error(e)
 
@@ -185,8 +179,8 @@ class GupshupClient:
         ClientConnectorError:
             Show and error if the connection fails.
         """
-        headers = data.get("headers")
-        data.pop("headers")
+        headers = data.pop("headers")
+
         # Get the latitude and longitude from the geo_uri
         location = data_location.get("geo_uri").split(":")[1].split(";")[0]
         latitude = location.split(",")[0]
@@ -204,10 +198,7 @@ class GupshupClient:
         )
         self.log.debug(f"Sending location message: {data}")
         try:
-            if additional_data and self.is_cloud:
-                resp = await self.http.post(self.cloud_url, data=data, headers=headers)
-            else:
-                resp = await self.http.post(self.base_url, data=data, headers=headers)
+            resp = await self.http.post(self.base_url, data=data, headers=headers)
         except ClientConnectorError as e:
             self.log.error(e)
             return {"status": 400, "message": e}
@@ -234,10 +225,9 @@ class GupshupClient:
         data: dict
             The necessary data to send the reaction
         """
-        headers = data.get("headers")
-        data.pop("headers")
+        headers = data.pop("headers")
         data["message"] = json.dumps({"msgId": message_id, "type": type, "emoji": emoji})
 
-        resp = await self.http.post(self.cloud_url, data=data, headers=headers)
+        resp = await self.http.post(self.base_url, data=data, headers=headers)
         response_data = json.loads(await resp.text())
         return response_data
