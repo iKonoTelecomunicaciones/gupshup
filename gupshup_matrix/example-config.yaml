@@ -147,8 +147,6 @@ gupshup:
     cloud_url: https://api.gupshup.io/wa/api/v1/msg
     # If the Gupshup API is hosted on Whatsapp cloud, set this to true.
     is_cloud: false
-    # Gupshup reaction URL
-    cloud_api_url: https://api.gupshup.io/wa/api/v1/msg
     # Path prefix for webhook endpoints. Subpaths are /status and /receive.
     # Note that the webhook must be put behind a reverse proxy with https.
     webhook_path: /gupshup
