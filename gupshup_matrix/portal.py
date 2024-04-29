@@ -576,6 +576,7 @@ class Portal(DBPortal, BasePortal):
         if message.msgtype == MessageType.NOTICE and not self.config["bridge.bridge_notices"]:
             return
 
+        gupshup_data = await self.main_data_gs
         if message.msgtype in (MessageType.TEXT, MessageType.NOTICE):
             if message.format == Format.HTML:
                 text = await matrix_to_whatsapp(message.formatted_body)
@@ -583,7 +584,7 @@ class Portal(DBPortal, BasePortal):
                 text = text = message.body
 
             resp = await self.gsc.send_message(
-                data=await self.main_data_gs,
+                data=gupshup_data,
                 body=text,
                 is_gupshup_template=is_gupshup_template,
                 additional_data=additional_data,
@@ -597,7 +598,7 @@ class Portal(DBPortal, BasePortal):
         ):
             url = f"{self.homeserver_address}/_matrix/media/r0/download/{message.url[6:]}"
             resp = await self.gsc.send_message(
-                data=await self.main_data_gs,
+                data=gupshup_data,
                 media=url,
                 body=message.body,
                 msgtype=message.msgtype,
@@ -605,7 +606,7 @@ class Portal(DBPortal, BasePortal):
             )
         elif message.msgtype == MessageType.LOCATION:
             resp = await self.gsc.send_location(
-                data=await self.main_data_gs,
+                data=gupshup_data,
                 data_location=message,
                 additional_data=additional_data,
             )
