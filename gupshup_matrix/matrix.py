@@ -144,8 +144,10 @@ class MatrixHandler(BaseMatrixHandler):
         portal: po.Portal = await po.Portal.get_by_mxid(room_id)
         if not portal:
             return
-        try:
-            await portal.handle_matrix_reaction(user, message_mxid, event_id, room_id, content)
-        except ValueError as error:
-            self.log.error(f"Error trying to send a reaction {error}")
-            return
+
+        await portal.main_intent.send_notice(portal.mxid, "Reactions are deactivated for now.")
+        #try:
+        #    await portal.handle_matrix_reaction(user, message_mxid, event_id, room_id, content)
+        #except ValueError as error:
+        #    self.log.error(f"Error trying to send a reaction {error}")
+        #    return
