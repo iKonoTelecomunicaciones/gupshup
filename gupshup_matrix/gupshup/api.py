@@ -22,7 +22,7 @@ class GupshupClient:
         self.sender = config["gupshup.sender"]
         self.http = ClientSession(loop=loop)
 
-    def format_message(self, message: object, additional_data: Optional[object] = None) -> str:
+    def process_message_context(self, message: object, additional_data: Optional[object] = None) -> str:
         """
         Format the message to be sent to Gupshup.
 
@@ -38,7 +38,7 @@ class GupshupClient:
         str
             The formatted message.
         """
-        if additional_data and additional_data.get("context", None):
+        if additional_data and additional_data.get("context"):
             message["context"] = additional_data.get("context", {})
 
         return json.dumps(message)
@@ -77,24 +77,6 @@ class GupshupClient:
             Show and error if the connection fails.
         """
         headers = data.pop("headers")
-        if body and msgtype == MessageType.TEXT and not is_gupshup_template:
-            message_object = {"type": "text", "text": body}
-
-        else:
-            message_object = {"isHSM": "true", "type": "text", "text": body}
-
-        if media:
-            if msgtype == MessageType.IMAGE:
-                message_object = {"type": "image", "originalUrl": media, "previewUrl": media}
-
-            elif msgtype == MessageType.VIDEO:
-                message_object = {"type": "video", "url": media}
-
-            elif msgtype == MessageType.AUDIO:
-                message_object = {"type": "audio", "url": media}
-
-            elif msgtype == MessageType.FILE:
-                message_object = {"type": "file", "url": media, "filename": body}
 
         # If the message is a interactive message, the additional_data is a dict with the quick
         # replies or lists, otherwise additional_data has an id of a message that
@@ -102,7 +84,23 @@ class GupshupClient:
         if msgtype == "m.interactive_message":
             data["message"] = json.dumps(additional_data)
         else:
-            data["message"] = self.format_message(message_object, additional_data)
+            if body and msgtype == MessageType.TEXT:
+                message_object = {"type": "text", "text": body}
+
+            if media:
+                if msgtype == MessageType.IMAGE:
+                    message_object = {"type": "image", "originalUrl": media, "previewUrl": media}
+
+                elif msgtype == MessageType.VIDEO:
+                    message_object = {"type": "video", "url": media}
+
+                elif msgtype == MessageType.AUDIO:
+                    message_object = {"type": "audio", "url": media}
+
+                elif msgtype == MessageType.FILE:
+                    message_object = {"type": "file", "url": media, "filename": body}
+
+            data["message"] = self.process_message_context(message_object, additional_data)
 
         self.log.debug(f"Sending message {data}")
 
