@@ -585,6 +585,7 @@ class Portal(DBPortal, BasePortal):
 
             resp = await self.gsc.send_message(
                 data=gupshup_data,
+                msgtype=MessageType.TEXT,
                 body=text,
                 is_gupshup_template=is_gupshup_template,
                 additional_data=additional_data,

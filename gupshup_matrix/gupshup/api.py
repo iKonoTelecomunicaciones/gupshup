@@ -22,6 +22,27 @@ class GupshupClient:
         self.sender = config["gupshup.sender"]
         self.http = ClientSession(loop=loop)
 
+    def format_message(self, message: object, additional_data: Optional[object] = None) -> str:
+        """
+        Format the message to be sent to Gupshup.
+
+        Parameters
+        ----------
+        message: object
+            The object with the message that will be sent to Gupshup.
+        additional_data: dict
+            Contains the id of the message that the user is replying to.
+
+        Returns
+        ----------
+        str
+            The formatted message.
+        """
+        if additional_data and additional_data.get("context", None):
+            message["context"] = additional_data.get("context", {})
+
+        return json.dumps(message)
+
     async def send_message(
         self,
         data: dict,
@@ -56,58 +77,32 @@ class GupshupClient:
             Show and error if the connection fails.
         """
         headers = data.pop("headers")
+        if body and msgtype == MessageType.TEXT and not is_gupshup_template:
+            message_object = {"type": "text", "text": body}
 
-        if body and msgtype is None and not is_gupshup_template:
-            data["message"] = json.dumps(
-                {
-                    "isHSM": "false",
-                    "type": "text",
-                    "text": body,
-                    "context": additional_data.get("context", {}),
-                }
-            )
-        # If the message is a interactive message, the additional_data is a dict with the quick
-        # replies or lists, otherwise additional_data has an id of a message that
-        # the user is replying to
-        elif msgtype == "m.interactive_message":
-            data["message"] = json.dumps(additional_data)
         else:
-            data["message"] = json.dumps(
-                {
-                    "isHSM": "true",
-                    "type": "text",
-                    "text": body,
-                    "context": additional_data.get("context", {}),
-                }
-            )
+            message_object = {"isHSM": "true","type": "text","text": body}
 
         if media:
             if msgtype == MessageType.IMAGE:
-                data["message"] = json.dumps(
-                    {
-                        "type": "image",
-                        "originalUrl": media,
-                        "previewUrl": media,
-                        "context": additional_data.get("context", {}),
-                    }
-                )
+                message_object = {"type": "image","originalUrl": media,"previewUrl": media}
+
             elif msgtype == MessageType.VIDEO:
-                data["message"] = json.dumps(
-                    {"type": "video", "url": media, "context": additional_data.get("context", {})}
-                )
+                message_object = {"type": "video","url": media}
+
             elif msgtype == MessageType.AUDIO:
-                data["message"] = json.dumps(
-                    {"type": "audio", "url": media, "context": additional_data.get("context", {})}
-                )
+                message_object = {"type": "audio","url": media}
+
             elif msgtype == MessageType.FILE:
-                data["message"] = json.dumps(
-                    {
-                        "type": "file",
-                        "url": media,
-                        "filename": body,
-                        "context": additional_data.get("context", {}),
-                    }
-                )
+                message_object = {"type": "file","url": media,"filename": body}
+
+        # If the message is a interactive message, the additional_data is a dict with the quick
+        # replies or lists, otherwise additional_data has an id of a message that
+        # the user is replying to
+        if msgtype == "m.interactive_message":
+            data["message"] = json.dumps(additional_data)
+        else:
+            data["message"] = self.format_message(message_object, additional_data)
 
         self.log.debug(f"Sending message {data}")
 
