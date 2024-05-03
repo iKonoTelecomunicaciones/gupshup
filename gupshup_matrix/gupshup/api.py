@@ -22,7 +22,9 @@ class GupshupClient:
         self.sender = config["gupshup.sender"]
         self.http = ClientSession(loop=loop)
 
-    def process_message_context(self, message: object, additional_data: Optional[object] = None) -> str:
+    def process_message_context(
+        self, message: object, additional_data: Optional[object] = None
+    ) -> str:
         """
         Format the message to be sent to Gupshup.
 
