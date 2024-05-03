@@ -81,20 +81,20 @@ class GupshupClient:
             message_object = {"type": "text", "text": body}
 
         else:
-            message_object = {"isHSM": "true","type": "text","text": body}
+            message_object = {"isHSM": "true", "type": "text", "text": body}
 
         if media:
             if msgtype == MessageType.IMAGE:
-                message_object = {"type": "image","originalUrl": media,"previewUrl": media}
+                message_object = {"type": "image", "originalUrl": media, "previewUrl": media}
 
             elif msgtype == MessageType.VIDEO:
-                message_object = {"type": "video","url": media}
+                message_object = {"type": "video", "url": media}
 
             elif msgtype == MessageType.AUDIO:
-                message_object = {"type": "audio","url": media}
+                message_object = {"type": "audio", "url": media}
 
             elif msgtype == MessageType.FILE:
-                message_object = {"type": "file","url": media,"filename": body}
+                message_object = {"type": "file", "url": media, "filename": body}
 
         # If the message is a interactive message, the additional_data is a dict with the quick
         # replies or lists, otherwise additional_data has an id of a message that
