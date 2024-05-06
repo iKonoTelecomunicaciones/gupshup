@@ -23,15 +23,15 @@ class GupshupClient:
         self.http = ClientSession(loop=loop)
 
     def process_message_context(
-        self, message: object, additional_data: Optional[object] = None
+        self, message: dict, additional_data: Optional[dict] = None
     ) -> str:
         """
         Format the message to be sent to Gupshup.
 
         Parameters
         ----------
-        message: object
-            The object with the message that will be sent to Gupshup.
+        message: dict
+            The dict with the message that will be sent to Gupshup.
         additional_data: dict
             Contains the id of the message that the user is replying to.
 
@@ -87,22 +87,22 @@ class GupshupClient:
             data["message"] = json.dumps(additional_data)
         else:
             if body and msgtype == MessageType.TEXT:
-                message_object = {"type": "text", "text": body}
+                message_dict = {"type": "text", "text": body}
 
             if media:
                 if msgtype == MessageType.IMAGE:
-                    message_object = {"type": "image", "originalUrl": media, "previewUrl": media}
+                    message_dict = {"type": "image", "originalUrl": media, "previewUrl": media}
 
                 elif msgtype == MessageType.VIDEO:
-                    message_object = {"type": "video", "url": media}
+                    message_dict = {"type": "video", "url": media}
 
                 elif msgtype == MessageType.AUDIO:
-                    message_object = {"type": "audio", "url": media}
+                    message_dict = {"type": "audio", "url": media}
 
                 elif msgtype == MessageType.FILE:
-                    message_object = {"type": "file", "url": media, "filename": body}
+                    message_dict = {"type": "file", "url": media, "filename": body}
 
-            data["message"] = self.process_message_context(message_object, additional_data)
+            data["message"] = self.process_message_context(message_dict, additional_data)
 
         self.log.debug(f"Sending message {data}")
 
