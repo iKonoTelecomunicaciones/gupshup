@@ -547,7 +547,6 @@ class Portal(DBPortal, BasePortal):
         sender: "u.User",
         message: MessageEventContent,
         event_id: EventID,
-        is_gupshup_template: bool = False,
         additional_data: Optional[dict] = {},
     ) -> None:
         if message.msgtype == "m.interactive_message":
@@ -586,7 +585,6 @@ class Portal(DBPortal, BasePortal):
             resp = await self.gsc.send_message(
                 data=gupshup_data,
                 body=text,
-                is_gupshup_template=is_gupshup_template,
                 additional_data=additional_data,
             )
 
@@ -898,3 +896,52 @@ class Portal(DBPortal, BasePortal):
         )
 
         return True
+
+    async def handle_matrix_template(
+        self,
+        sender: u.User,
+        event_id: EventID,
+        template_id: str,
+        variables: Optional[list[str]] = [],
+    ) -> None:
+        """
+        Send a template to user in WhatsApp
+
+        Parameters
+        ----------
+        sender: User
+            The user who sent the message
+        event_id: EventID
+            The id of the event of the message sended to Matrix
+        template_id: str
+            The id of the template that Gupshup use to send the message
+        variables: Optional[list]
+            The value of the variables, if the template has it
+        """
+        gupshup_data = await self.main_data_gs
+
+        try:
+            status, resp = await self.gsc.send_template(
+                data=gupshup_data,
+                template_id=template_id,
+                variables=variables,
+            )
+        except Exception as e:
+            self.log.error(f"Error sending template: {e}")
+            return
+
+        if status == 202:
+            await DBMessage(
+                mxid=event_id,
+                mx_room=self.mxid,
+                sender=self.gs_source,
+                gsid=GupshupMessageID(resp.get("messageId")),
+                gs_app=self.gs_app,
+            ).insert()
+        else:
+            message = resp.get("message")
+
+            if type(message) == dict:
+                message = message.get("message")
+
+            await self.main_intent.send_notice(self.mxid, f"Error sending template {message}")
