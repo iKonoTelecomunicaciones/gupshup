@@ -215,7 +215,7 @@ class ProvisioningAPI:
         try:
             room_id = data["room_id"]
             template_message = data["template_message"]
-            template_variables = data.get("variables")
+            template_variables = data.get("variables") or []
             gupshup_template_id = data.get("gupshup_template_id")
 
         except KeyError as e:
