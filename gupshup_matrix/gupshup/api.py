@@ -22,14 +22,37 @@ class GupshupClient:
         self.sender = config["gupshup.sender"]
         self.http = ClientSession(loop=loop)
 
+    def process_message_context(
+        self, message: Dict, additional_data: Optional[Dict] = None
+    ) -> str:
+        """
+        Format the message to be sent to Gupshup.
+
+        Parameters
+        ----------
+        message: dict
+            The dict with the message that will be sent to Gupshup.
+        additional_data: dict
+            Contains the id of the message that the user is replying to.
+
+        Returns
+        ----------
+        str
+            The formatted message.
+        """
+        if additional_data and additional_data.get("context"):
+            message["context"] = additional_data.get("context")
+
+        return json.dumps(message)
+
     async def send_message(
         self,
-        data: dict,
+        data: Dict,
         body: Optional[str] = None,
         msgtype: Optional[str] = None,
         media: Optional[str] = None,
         is_gupshup_template: bool = False,
-        additional_data: Optional[dict] = {},
+        additional_data: Optional[Dict] = {},
     ) -> Dict[str, str]:
         """
         Send a message to a user.
@@ -57,57 +80,29 @@ class GupshupClient:
         """
         headers = data.pop("headers")
 
-        if body and msgtype is None and not is_gupshup_template:
-            data["message"] = json.dumps(
-                {
-                    "isHSM": "false",
-                    "type": "text",
-                    "text": body,
-                    "context": additional_data.get("context", {}),
-                }
-            )
         # If the message is a interactive message, the additional_data is a dict with the quick
         # replies or lists, otherwise additional_data has an id of a message that
         # the user is replying to
-        elif msgtype == "m.interactive_message":
+        if msgtype == "m.interactive_message":
             data["message"] = json.dumps(additional_data)
         else:
-            data["message"] = json.dumps(
-                {
-                    "isHSM": "true",
-                    "type": "text",
-                    "text": body,
-                    "context": additional_data.get("context", {}),
-                }
-            )
+            if body and msgtype == MessageType.TEXT:
+                message_dict = {"type": "text", "text": body}
 
-        if media:
-            if msgtype == MessageType.IMAGE:
-                data["message"] = json.dumps(
-                    {
-                        "type": "image",
-                        "originalUrl": media,
-                        "previewUrl": media,
-                        "context": additional_data.get("context", {}),
-                    }
-                )
-            elif msgtype == MessageType.VIDEO:
-                data["message"] = json.dumps(
-                    {"type": "video", "url": media, "context": additional_data.get("context", {})}
-                )
-            elif msgtype == MessageType.AUDIO:
-                data["message"] = json.dumps(
-                    {"type": "audio", "url": media, "context": additional_data.get("context", {})}
-                )
-            elif msgtype == MessageType.FILE:
-                data["message"] = json.dumps(
-                    {
-                        "type": "file",
-                        "url": media,
-                        "filename": body,
-                        "context": additional_data.get("context", {}),
-                    }
-                )
+            if media:
+                if msgtype == MessageType.IMAGE:
+                    message_dict = {"type": "image", "originalUrl": media, "previewUrl": media}
+
+                elif msgtype == MessageType.VIDEO:
+                    message_dict = {"type": "video", "url": media}
+
+                elif msgtype == MessageType.AUDIO:
+                    message_dict = {"type": "audio", "url": media}
+
+                elif msgtype == MessageType.FILE:
+                    message_dict = {"type": "file", "url": media, "filename": body}
+
+            data["message"] = self.process_message_context(message_dict, additional_data)
 
         self.log.debug(f"Sending message {data}")
 
@@ -157,7 +152,7 @@ class GupshupClient:
             self.log.debug(f"Message {message_id} marked as read")
 
     async def send_location(
-        self, data: dict, data_location: dict, additional_data: Optional[dict] = {}
+        self, data: Dict, data_location: Dict, additional_data: Optional[Dict] = {}
     ) -> Dict[str, str]:
         """
         Send a location to a user.
