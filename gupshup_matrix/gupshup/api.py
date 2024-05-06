@@ -23,7 +23,7 @@ class GupshupClient:
         self.http = ClientSession(loop=loop)
 
     def process_message_context(
-        self, message: dict, additional_data: Optional[dict] = None
+        self, message: Dict, additional_data: Optional[Dict] = None
     ) -> str:
         """
         Format the message to be sent to Gupshup.
@@ -41,18 +41,18 @@ class GupshupClient:
             The formatted message.
         """
         if additional_data and additional_data.get("context"):
-            message["context"] = additional_data.get("context", {})
+            message["context"] = additional_data.get("context")
 
         return json.dumps(message)
 
     async def send_message(
         self,
-        data: dict,
+        data: Dict,
         body: Optional[str] = None,
         msgtype: Optional[str] = None,
         media: Optional[str] = None,
         is_gupshup_template: bool = False,
-        additional_data: Optional[dict] = {},
+        additional_data: Optional[Dict] = {},
     ) -> Dict[str, str]:
         """
         Send a message to a user.
@@ -152,7 +152,7 @@ class GupshupClient:
             self.log.debug(f"Message {message_id} marked as read")
 
     async def send_location(
-        self, data: dict, data_location: dict, additional_data: Optional[dict] = {}
+        self, data: Dict, data_location: Dict, additional_data: Optional[Dict] = {}
     ) -> Dict[str, str]:
         """
         Send a location to a user.
