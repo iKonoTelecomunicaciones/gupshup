@@ -61,13 +61,21 @@ class InteractiveMessage(SerializableAttrs):
         msg = ""
 
         if self.type == "quick_reply":
-            msg = f"{self.content.header}{self.content.text}"
+            msg = ""
+            if self.content.header:
+                msg = f"{self.content.header}"
+            if self.content.text:
+                msg = f"{msg}{self.content.text}"
 
             for option in self.options:
                 msg = f"{msg}\n{self.options.index(option) + 1}. {option.title}"
 
         elif self.type == "list":
-            msg = f"{self.title}{self.body}"
+            msg = ""
+            if self.title:
+                msg = f"{self.title}\n"
+            if self.body:
+                msg = f"{msg}{self.body}"
 
             for item in self.items:
                 for option in item.options:
