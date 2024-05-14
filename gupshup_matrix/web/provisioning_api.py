@@ -216,7 +216,7 @@ class ProvisioningAPI:
             room_id = data["room_id"]
             template_message = data["template_message"]
             template_variables = data.get("variables") or []
-            gupshup_template_id = data.get("gupshup_template_id")
+            template_id = data.get("template_id")
 
         except KeyError as e:
             raise self._missing_key_error(e)
@@ -246,13 +246,19 @@ class ProvisioningAPI:
             )
 
         msg_event_id = await portal.az.intent.send_message(portal.mxid, msg)
-
-        await portal.handle_matrix_template(
-            sender=user,
-            event_id=msg_event_id,
-            template_id=gupshup_template_id,
-            variables=template_variables,
-        )
+        if template_id:
+            await portal.handle_matrix_template(
+                sender=user,
+                event_id=msg_event_id,
+                template_id=template_id,
+                variables=template_variables,
+            )
+        else:
+            await portal.handle_matrix_message(
+                sender=user,
+                message=msg,
+                event_id=msg_event_id,
+            )
 
         return web.json_response(
             data={"detail": "Template has been sent", "event_id": msg_event_id}
