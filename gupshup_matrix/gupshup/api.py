@@ -3,7 +3,7 @@ import json
 import logging
 from typing import Dict, Optional
 
-from aiohttp import ClientConnectorError, ClientSession
+from aiohttp import ClientConnectorError, ClientSession, ContentTypeError
 from mautrix.types import MessageType
 
 from ..config import Config
@@ -18,6 +18,7 @@ class GupshupClient:
     def __init__(self, config: Config, loop: asyncio.AbstractEventLoop) -> None:
         self.base_url = config["gupshup.base_url"]
         self.read_url = config["gupshup.read_url"]
+        self.template_url = config["gupshup.template_url"]
         self.app_name = config["gupshup.app_name"]
         self.sender = config["gupshup.sender"]
         self.http = ClientSession(loop=loop)
@@ -226,3 +227,46 @@ class GupshupClient:
         resp = await self.http.post(self.base_url, data=data, headers=headers)
         response_data = json.loads(await resp.text())
         return response_data
+
+    async def send_template(self, data: dict, template_id: str, variables: list) -> dict:
+        """
+        Send a template to a user.
+
+        Parameters
+        ----------
+        data: dict
+            The data with Gupshup needed to send the message, it contains the headers, the channel,
+            the source, the destination and the app name.
+        template_id: str
+            The id of the template that will be sent to the user.
+        variables: list
+            The variables that will be used in the template.
+
+        Returns
+        -------
+        response_data: dict
+            The response of the request to Gupshup.
+
+        Exceptions
+        ----------
+        ClientConnectorError:
+            Show and error if the connection fails.
+        """
+        headers = data.pop("headers")
+        data["template"] = json.dumps({"id": template_id, "params": variables})
+
+        try:
+            resp = await self.http.post(self.template_url, data=data, headers=headers)
+        except ClientConnectorError as e:
+            self.log.error(
+                f"Error sending the template {template_id} to the user {data['destination']}: {e}"
+            )
+            return
+
+        try:
+            response_data = await resp.json()
+        except (ValueError, ContentTypeError):
+            response_read = await resp.read()
+            response_data = json.loads(response_read)
+
+        return resp.status, response_data

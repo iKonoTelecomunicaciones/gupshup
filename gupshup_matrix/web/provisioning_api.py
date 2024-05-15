@@ -199,14 +199,28 @@ class ProvisioningAPI:
         )
 
     async def template(self, request: web.Request) -> web.Response:
+        """Send a template message to a room
+
+        Parameters
+        ----------
+        request: web.Request
+            The request that contains the data of the template message and the user.
+
+        Returns
+        -------
+            A dict with the status code a message and the id of the generated event.
+        """
         user, data = await self._get_user(request)
 
         try:
             room_id = data["room_id"]
             template_message = data["template_message"]
+            template_variables = data.get("variables") or []
+            template_id = data.get("template_id")
 
         except KeyError as e:
             raise self._missing_key_error(e)
+
         if not room_id:
             return web.json_response(
                 data={"error": "room_id not entered", "state": "missing-field"},
@@ -232,13 +246,19 @@ class ProvisioningAPI:
             )
 
         msg_event_id = await portal.az.intent.send_message(portal.mxid, msg)
-
-        await portal.handle_matrix_message(
-            sender=user,
-            message=msg,
-            event_id=msg_event_id,
-            is_gupshup_template=True,
-        )
+        if template_id:
+            await portal.handle_matrix_template(
+                sender=user,
+                event_id=msg_event_id,
+                template_id=template_id,
+                variables=template_variables,
+            )
+        else:
+            await portal.handle_matrix_message(
+                sender=user,
+                message=msg,
+                event_id=msg_event_id,
+            )
 
         return web.json_response(
             data={"detail": "Template has been sent", "event_id": msg_event_id}

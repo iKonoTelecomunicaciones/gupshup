@@ -102,11 +102,10 @@ async def template(evt: CommandEvent) -> EventID:
     msg_event_id = await portal.az.intent.send_message(
         portal.mxid, msg
     )  # only be visible to the agent
-    await portal.handle_matrix_message(
+    await portal.handle_matrix_template(
         sender=evt.sender,
         message=msg,
         event_id=msg_event_id,
-        is_gupshup_template=True,
     )
 
 
