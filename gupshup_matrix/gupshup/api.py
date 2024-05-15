@@ -265,10 +265,7 @@ class GupshupClient:
 
         try:
             response_data = await resp.json()
-        except ValueError:
-            response_read = await resp.read()
-            response_data = json.loads(response_read)
-        except ContentTypeError:
+        except (ValueError, ContentTypeError):
             response_read = await resp.read()
             response_data = json.loads(response_read)
 
