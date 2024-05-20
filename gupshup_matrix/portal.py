@@ -601,6 +601,7 @@ class Portal(DBPortal, BasePortal):
                 media=url,
                 body=message.body,
                 msgtype=message.msgtype,
+                file_name=self.config["gupshup.file_name"],
                 additional_data=additional_data,
             )
         elif message.msgtype == MessageType.LOCATION:
