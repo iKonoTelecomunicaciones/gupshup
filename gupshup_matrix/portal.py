@@ -596,12 +596,17 @@ class Portal(DBPortal, BasePortal):
             MessageType.FILE,
         ):
             url = f"{self.homeserver_address}/_matrix/media/r0/download/{message.url[6:]}"
+            if message.info and message.info.mimetype == "application/pdf":
+                file_name = f"{self.config['gupshup.file_name']}.pdf"
+            else:
+                file_name = self.config['gupshup.file_name']
+
             resp = await self.gsc.send_message(
                 data=gupshup_data,
                 media=url,
                 body=message.body,
                 msgtype=message.msgtype,
-                file_name=self.config["gupshup.file_name"],
+                file_name=file_name,
                 additional_data=additional_data,
             )
         elif message.msgtype == MessageType.LOCATION:

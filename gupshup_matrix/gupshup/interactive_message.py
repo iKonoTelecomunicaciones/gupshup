@@ -63,7 +63,7 @@ class InteractiveMessage(SerializableAttrs):
         if self.type == "quick_reply":
             msg = ""
             if self.content.header:
-                msg = f"{self.content.header}"
+                msg = f"{self.content.header}\n"
             if self.content.text:
                 msg = f"{msg}{self.content.text}"
 
