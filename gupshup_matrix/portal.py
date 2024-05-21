@@ -599,7 +599,7 @@ class Portal(DBPortal, BasePortal):
             if message.info and message.info.mimetype == "application/pdf":
                 file_name = f"{self.config['gupshup.file_name']}.pdf"
             else:
-                file_name = self.config['gupshup.file_name']
+                file_name = self.config["gupshup.file_name"]
 
             resp = await self.gsc.send_message(
                 data=gupshup_data,
