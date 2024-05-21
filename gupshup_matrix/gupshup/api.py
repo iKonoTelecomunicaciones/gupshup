@@ -52,7 +52,7 @@ class GupshupClient:
         body: Optional[str] = None,
         msgtype: Optional[str] = None,
         media: Optional[str] = None,
-        is_gupshup_template: bool = False,
+        file_name: Optional[str] = "",
         additional_data: Optional[Dict] = {},
     ) -> Dict[str, str]:
         """
@@ -69,8 +69,6 @@ class GupshupClient:
             The type of the message, it can be a text message, a file, an image, a video, etc.
         media: Optional[str]
             The url of the media if the message is a file, an image, a video, etc.
-        is_gupshup_template: bool
-            If the message is a Gupshup template or not.
         additional_data: Optional[dict]
             Contains the id of the message that the user is replying to.
 
@@ -101,7 +99,10 @@ class GupshupClient:
                     message_dict = {"type": "audio", "url": media}
 
                 elif msgtype == MessageType.FILE:
-                    message_dict = {"type": "file", "url": media, "filename": body}
+                    message_dict = {"type": "file", "url": media, "filename": file_name}
+
+                if body:
+                    message_dict["caption"] = body
 
             data["message"] = self.process_message_context(message_dict, additional_data)
 
