@@ -1,35 +1,35 @@
-FROM docker.io/alpine:3.14
+FROM docker.io/alpine:3.18
 
 RUN apk add --no-cache \
-      python3 py3-pip py3-setuptools py3-wheel \
-      py3-virtualenv \
-      py3-pillow \
-      py3-aiohttp \
-      py3-magic \
-      py3-ruamel.yaml \
-      py3-commonmark \
-      py3-phonenumbers \
-      # Other dependencies
-      ffmpeg \
-      ca-certificates \
-      su-exec \
-      # encryption
-      py3-olm \
-      py3-cffi \
-      py3-pycryptodome \
-      py3-unpaddedbase64 \
-      py3-future \
-      bash \
-      curl \
-      jq \
-      yq
+  python3 py3-pip py3-setuptools py3-wheel \
+  py3-virtualenv \
+  py3-pillow \
+  py3-aiohttp \
+  py3-magic \
+  py3-ruamel.yaml \
+  py3-commonmark \
+  py3-phonenumbers \
+  # Other dependencies
+  ffmpeg \
+  ca-certificates \
+  su-exec \
+  # encryption
+  py3-olm \
+  py3-cffi \
+  py3-pycryptodome \
+  py3-unpaddedbase64 \
+  py3-future \
+  bash \
+  curl \
+  jq \
+  yq
 
 COPY requirements.txt /opt/gupshup-matrix/requirements.txt
 COPY requirements-dev.txt /opt/gupshup-matrix/requirements-dev.txt
 WORKDIR /opt/gupshup-matrix
 RUN apk add --virtual .build-deps python3-dev libffi-dev build-base \
- && pip3 install -r requirements.txt \
- && apk del .build-deps
+  && pip3 install -r requirements.txt \
+  && apk del .build-deps
 
 COPY . /opt/gupshup-matrix
 RUN apk add git && pip3 install .[all] && apk del git \
