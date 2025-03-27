@@ -6,6 +6,7 @@ from string import Template
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
 
 from aiohttp import ClientConnectorError
+import asyncpg
 from markdown import markdown
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal
@@ -109,6 +110,10 @@ class Portal(DBPortal, BasePortal):
             gs_app = await DBGupshupApplication.get_by_name(name=gs_app_name)
         except Exception as e:
             self.log.exception(e)
+            return
+
+        if not gs_app:
+            self.log.error(f"Application {gs_app_name} not found")
             return
 
         self.gs_source = gs_app.phone_number
@@ -470,7 +475,11 @@ class Portal(DBPortal, BasePortal):
                 pass
             elif status.type == GupshupMessageStatus.READ:
                 if msg:
-                    await self.main_intent.mark_read(self.mxid, msg.mxid)
+                    self.log.critical(f"Marking message {msg} as read")
+                    try:
+                        await self.main_intent.mark_read(self.mxid, msg.mxid)
+                    except Exception as e:
+                        self.log.error(f"Error marking message as read: {e}")
                 else:
                     self.log.debug(f"Ignoring the null message")
             elif status.type == GupshupMessageStatus.ENQUEUED:
@@ -680,7 +689,12 @@ class Portal(DBPortal, BasePortal):
         if create:
             portal = cls(chat_id)
             portal.phone = phone
-            await portal.insert()
+            try:
+                await portal.insert()
+            except asyncpg.exceptions.UniqueViolationError:
+                cls.log.error(f"Portal {chat_id} already exists")
+                portal = cast(cls, await super().get_by_chat_id(chat_id))
+
             await portal.postinit()
             return portal
 
@@ -889,13 +903,25 @@ class Portal(DBPortal, BasePortal):
 
         """
         room_members = await self.get_joined_users()
+
+        if not room_members:
+            self.log.error(
+                f"Unable to set power level for {member} in {self.mxid}, room members not found"
+            )
+            return False
+
         if member not in room_members:
             self.log.warning(
                 f"Unable to set power level for {member} in {self.mxid}, user not in room"
             )
             return False
 
-        portal_pl = await self.main_intent.get_power_levels(room_id=self.mxid)
+        try:
+            portal_pl = await self.main_intent.get_power_levels(room_id=self.mxid)
+        except Exception as e:
+            self.log.error(f"Error getting power levels in room {self.mxid}: {e}")
+            return False
+
         portal_pl.users[member] = power_level
         await self.main_intent.set_power_levels(
             room_id=self.mxid,
