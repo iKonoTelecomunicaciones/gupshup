@@ -475,7 +475,6 @@ class Portal(DBPortal, BasePortal):
                 pass
             elif status.type == GupshupMessageStatus.READ:
                 if msg:
-                    self.log.critical(f"Marking message {msg} as read")
                     try:
                         await self.main_intent.mark_read(self.mxid, msg.mxid)
                     except Exception as e:
@@ -906,7 +905,7 @@ class Portal(DBPortal, BasePortal):
 
         if not room_members:
             self.log.error(
-                f"Unable to set power level for {member} in {self.mxid}, room members not found"
+                f"Unable to set power level for {member} in room {self.mxid}, room members not found"
             )
             return False
 
