@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Awaitable
 
 from aiohttp import web
@@ -198,6 +199,38 @@ class ProvisioningAPI:
             status=201 if just_created else 200,
         )
 
+    def replace_variables(self, template_message: str, variables: list) -> str:
+        """
+        Replace the variables in the template message with the values
+
+        Parameters
+        ----------
+        template_message: str
+            The template message that contains the variables
+        variables: list
+            The values of the variables
+
+        Returns
+        -------
+        str
+            The template message with the variables replaced
+        """
+
+        # Do a function that replaces the variables in the template message, asking if the template
+        # message contain the next pattenr: {{n}} and replace it by {n}
+        message_pattern = re.compile(r"{{(\d+)}}")
+        message = ""
+
+        if re.findall(message_pattern, template_message):
+            message = re.sub(message_pattern, r"{}", template_message)
+        else:
+            message = template_message
+
+        # Replace the variables in the template message
+        message = message.format(*variables)
+
+        return message
+
     async def template(self, request: web.Request) -> web.Response:
         """Send a template message to a room
 
@@ -233,6 +266,16 @@ class ProvisioningAPI:
                 status=400,
                 headers=self._acao_headers,
             )
+
+        if template_variables:
+            try:
+                template_message = self.replace_variables(template_message, template_variables)
+            except IndexError:
+                return web.json_response(
+                    data={"detail": "Not enough variables provided for the message template"},
+                    status=400,
+                    headers=self._acao_headers,
+                )
 
         msg = TextMessageEventContent(body=template_message, msgtype=MessageType.TEXT)
         msg.trim_reply_fallback()
