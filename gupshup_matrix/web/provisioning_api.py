@@ -217,7 +217,7 @@ class ProvisioningAPI:
         """
 
         # Do a function that replaces the variables in the template message, asking if the template
-        # message contain the next pattenr: {{n}} and replace it by {n}
+        # message contain the next pattern: {{n}} and replace it by {n}
         message_pattern = re.compile(r"{{(\d+)}}")
         message = ""
 
