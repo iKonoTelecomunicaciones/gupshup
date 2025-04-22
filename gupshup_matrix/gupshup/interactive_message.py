@@ -21,6 +21,7 @@ class TextReply(SerializableAttrs):
         text_objt = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text_objt)
         return cls(text=text_objt)
 
+
 @dataclass
 class ContentQuickReplay(SerializableAttrs):
     type: str = ib(default=None, metadata={"json": "type"})
@@ -36,15 +37,15 @@ class ContentQuickReplay(SerializableAttrs):
         text_data = None
         caption_data = None
 
-        if data.get('header'):
+        if data.get("header"):
             header_data = TextReply.from_dict({"text": data.get("header")})
-        if data.get('text'):
+        if data.get("text"):
             text_data = TextReply.from_dict(data)
-        if data.get('caption'):
+        if data.get("caption"):
             caption_data = TextReply.from_dict({"text": data.get("caption")})
 
         return cls(
-            type=data.get('type'),
+            type=data.get("type"),
             header=header_data.text if header_data else None,
             text=text_data.text if text_data else None,
             caption=caption_data.text if caption_data else None,
