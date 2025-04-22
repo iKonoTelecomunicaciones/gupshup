@@ -1,8 +1,25 @@
-from typing import Dict, List
+import re
 
 from attr import dataclass, ib
 from mautrix.types import SerializableAttrs
 
+
+@dataclass
+class TextReply(SerializableAttrs):
+    """
+    Contains a text message.
+
+    - text: The text of the obj.
+
+    """
+
+    text: str = ib(metadata={"json": "text"}, default="")
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        text_objt = data.get("text", "")
+        text_objt = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text_objt)
+        return cls(text=text_objt)
 
 @dataclass
 class ContentQuickReplay(SerializableAttrs):
@@ -13,10 +30,33 @@ class ContentQuickReplay(SerializableAttrs):
     filename: str = ib(default=None, metadata={"json": "filename"})
     url: str = ib(default=None, metadata={"json": "url"})
 
+    @classmethod
+    def from_dict(cls, data: dict):
+        header_data = None
+        text_data = None
+        caption_data = None
+
+        if data.get('header'):
+            header_data = TextReply.from_dict({"text": data.get("header")})
+        if data.get('text'):
+            text_data = TextReply.from_dict(data)
+        if data.get('caption'):
+            caption_data = TextReply.from_dict({"text": data.get("caption")})
+
+        return cls(
+            type=data.get('type'),
+            header=header_data.text if header_data else None,
+            text=text_data.text if text_data else None,
+            caption=caption_data.text if caption_data else None,
+            filename=data.get("filename"),
+            url=data.get("url"),
+        )
+
 
 @dataclass
 class InteractiveMessageOption(SerializableAttrs):
     type: str = ib(default=None, metadata={"json": "type"})
+    buttonId: str = ib(metadata={"json": "buttonId"}, default="")
     title: str = ib(default=None, metadata={"json": "title"})
     description: str = ib(default=None, metadata={"json": "description"})
     postback_text: str = ib(default=None, metadata={"json": "postbackText"})
@@ -26,7 +66,7 @@ class InteractiveMessageOption(SerializableAttrs):
 class ItemListReplay(SerializableAttrs):
     title: str = ib(default=None, metadata={"json": "title"})
     subtitle: str = ib(default=None, metadata={"json": "subtitle"})
-    options: List[InteractiveMessageOption] = ib(metadata={"json": "options"}, factory=list)
+    options: list[InteractiveMessageOption] = ib(metadata={"json": "options"}, factory=list)
 
     @classmethod
     def from_dict(cls, data: dict):
@@ -47,14 +87,14 @@ class GlobalButtonsListReplay(SerializableAttrs):
 class InteractiveMessage(SerializableAttrs):
     type: str = ib(default=None, metadata={"json": "type"})
     content: ContentQuickReplay = ib(default=None, metadata={"json": "content"})
-    options: List[InteractiveMessageOption] = ib(metadata={"json": "options"}, factory=list)
+    options: list[InteractiveMessageOption] = ib(metadata={"json": "options"}, factory=list)
     title: str = ib(default=None, metadata={"json": "title"})
     body: str = ib(default=None, metadata={"json": "body"})
     msgid: str = ib(default=None, metadata={"json": "msgid"})
-    global_buttons: List[GlobalButtonsListReplay] = ib(
+    global_buttons: list[GlobalButtonsListReplay] = ib(
         metadata={"json": "globalButtons"}, factory=list
     )
-    items: List[ItemListReplay] = ib(metadata={"json": "items"}, factory=list)
+    items: list[ItemListReplay] = ib(metadata={"json": "items"}, factory=list)
 
     @property
     def message(self) -> str:
@@ -81,21 +121,23 @@ class InteractiveMessage(SerializableAttrs):
                 for option in item.options:
                     msg = f"{msg}\n{option.postback_text}. {option.title}"
 
-        return msg
+        return re.sub(r"\*(.+?)\*", r"**\1**", msg)
 
     @classmethod
-    def from_dict(cls, data: Dict):
+    def from_dict(cls, data: dict):
         if data["type"] == "quick_reply":
             return cls(
                 type=data["type"],
-                content=ContentQuickReplay(**data["content"]),
+                content=ContentQuickReplay.from_dict(data["content"]),
                 options=[InteractiveMessageOption(**option) for option in data["options"]],
             )
         elif data["type"] == "list":
+            body_text = TextReply.from_dict({"text": data["body"]})
+            title = TextReply.from_dict({"text": data["title"]})
             return cls(
                 type=data["type"],
-                title=data["title"],
-                body=data["body"],
+                title=title.text if title else None,
+                body=body_text.text if body_text else None,
                 global_buttons=[
                     GlobalButtonsListReplay(**item) for item in data["global_buttons"]
                 ],
