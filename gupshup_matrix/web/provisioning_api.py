@@ -535,7 +535,11 @@ class ProvisioningAPI:
         Parameters
         ----------
         request: web.Request
-            The request that contains the data of the company_app and the user.
+            The request that contains the data with the following fields:
+                - power_level: int
+                    The desired power level to set for the user.
+                - room_id: str
+                    The ID of the room where the power level should be set.
         Returns
         -------
         JSON
@@ -577,7 +581,7 @@ class ProvisioningAPI:
             f"Set power level for room {room_id} and user {user.mxid} with power level {power_level}"
         )
 
-        if not power_level or not room_id:
+        if power_level is None or power_level < 0 or not room_id:
             return web.json_response(
                 data={
                     "detail": {"message": "The user_id or power_level or room_id was not provided"}
@@ -711,7 +715,7 @@ class ProvisioningAPI:
             return web.json_response(
                 data={
                     "detail": {
-                        "message": f"Failed to set relay for user {portal.mxid} in portal {room_id}. Error:{e}"
+                        "message": f"Failed to set relay for user {user.mxid} in portal {room_id}. Error:{e}"
                     }
                 },
                 status=400,
