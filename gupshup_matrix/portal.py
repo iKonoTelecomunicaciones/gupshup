@@ -401,7 +401,7 @@ class Portal(DBPortal, BasePortal):
                     message_data += "</div>"
                     mxid = await self.send_text_message(message_data)
 
-        elif message.payload.type == "text":
+        elif message.payload.type in ["text", "quick_reply"]:
             if evt:
                 content = await whatsapp_reply_to_matrix(body, evt, self.main_intent, self.log)
                 mxid = await self.main_intent.send_message(self.mxid, content)
