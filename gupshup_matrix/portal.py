@@ -951,9 +951,13 @@ class Portal(DBPortal, BasePortal):
             The value of the variables, if the template has it
         """
         gupshup_data = await self.main_data_gs
+        gupshup_app: DBGupshupApplication = await DBGupshupApplication.get_by_admin_user(
+            self.relay_user_id
+        )
 
         try:
             status, resp = await self.gsc.send_template(
+                app_id=gupshup_app.app_id,
                 data=gupshup_data,
                 template_id=template_id,
                 variables=variables,

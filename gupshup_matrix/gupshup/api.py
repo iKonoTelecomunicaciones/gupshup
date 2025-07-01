@@ -3,7 +3,7 @@ import json
 import logging
 from typing import Dict, Optional
 
-from aiohttp import ClientConnectorError, ClientSession, ContentTypeError
+from aiohttp import ClientConnectorError, ClientSession, ContentTypeError, FormData
 from mautrix.types import MessageType
 
 from ..config import Config
@@ -19,6 +19,7 @@ class GupshupClient:
         self.base_url = config["gupshup.base_url"]
         self.read_url = config["gupshup.read_url"]
         self.template_url = config["gupshup.template_url"]
+        self.get_template = config["gupshup.get_template"]
         self.app_name = config["gupshup.app_name"]
         self.sender = config["gupshup.sender"]
         self.http = ClientSession(loop=loop)
@@ -229,12 +230,91 @@ class GupshupClient:
         response_data = json.loads(await resp.text())
         return response_data
 
-    async def send_template(self, data: dict, template_id: str, variables: list) -> dict:
+    async def get_body_of_template(
+        self,
+        app_id: str,
+        template_id: str,
+        variables: list,
+        headers: dict,
+        form_data: FormData,
+    ) -> dict:
+        """
+        Get the template data from Gupshup.
+
+        Parameters
+        ----------
+        app_id: str
+            The id of the Gupshup application.
+        api_key: str
+            The API key of the Gupshup application.
+        template_id: str
+            The id of the template that will be sent to the user.
+        variables: list
+            The variables that will be used in the template.
+        headers: dict
+            The headers to be used in the request.
+        form_data: FormData | None
+            The form data to be used in the request, if any.
+
+        Returns
+        -------
+        data: dict
+            The data of the template with the variables.
+
+        Exceptions
+        ----------
+        ClientConnectorError:
+            Show and error if the connection fails.
+        """
+        url = self.get_template.format(appId=app_id, templateId=template_id)
+        data = await self.http.get(url, headers=headers)
+
+        if data.status not in (200, 201, 202):
+            self.log.error(
+                f"Error getting template {template_id}: {data.status} - {await data.text()}"
+            )
+            return {}
+
+        response = await data.json()
+        template_gupshup_data = response.get("template")
+
+        form_data.add_field(
+            "template",
+            json.dumps(
+                {
+                    "id": template_id,
+                    "params": variables,
+                }
+            ),
+        )
+
+        media_type = template_gupshup_data.get("templateType").lower()
+        meta_data = json.loads(template_gupshup_data.get("containerMeta", "{}"))
+        if media_type in ["image", "document", "video"]:
+            form_data.add_field(
+                "message",
+                json.dumps(
+                    {
+                        "type": media_type,
+                        media_type: {
+                            "link": meta_data.get("mediaUrl"),
+                        },
+                    }
+                ),
+            )
+
+    async def send_template(
+        self, app_id: str, data: dict, template_id: str, variables: list
+    ) -> dict:
         """
         Send a template to a user.
 
         Parameters
         ----------
+        app_id: str
+            The id of the Gupshup application.
+        api_key: str
+            The API key of the Gupshup application.
         data: dict
             The data with Gupshup needed to send the message, it contains the headers, the channel,
             the source, the destination and the app name.
@@ -254,10 +334,20 @@ class GupshupClient:
             Show and error if the connection fails.
         """
         headers = data.pop("headers")
-        data["template"] = json.dumps({"id": template_id, "params": variables})
+        form_data = FormData()
+        for key, value in data.items():
+            form_data.add_field(key, str(value))
+
+        await self.get_body_of_template(
+            app_id=app_id,
+            template_id=template_id,
+            variables=variables,
+            headers=headers,
+            form_data=form_data,
+        )
 
         try:
-            resp = await self.http.post(self.template_url, data=data, headers=headers)
+            resp = await self.http.post(self.template_url, data=form_data, headers=headers)
         except ClientConnectorError as e:
             self.log.error(
                 f"Error sending the template {template_id} to the user {data['destination']}: {e}"
