@@ -57,7 +57,7 @@ class Config(BaseBridgeConfig):
         copy("gupshup.base_url")
         copy("gupshup.webhook_path")
         copy("gupshup.template_url")
-        copy("gupshup.get_template")
+        copy("gupshup.get_template_url")
         copy("gupshup.file_name")
 
         copy_dict("quick_reply")

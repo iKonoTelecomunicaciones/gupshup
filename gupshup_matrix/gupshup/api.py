@@ -19,7 +19,7 @@ class GupshupClient:
         self.base_url = config["gupshup.base_url"]
         self.read_url = config["gupshup.read_url"]
         self.template_url = config["gupshup.template_url"]
-        self.get_template = config["gupshup.get_template"]
+        self.get_template_url = config["gupshup.get_template_url"]
         self.app_name = config["gupshup.app_name"]
         self.sender = config["gupshup.sender"]
         self.http = ClientSession(loop=loop)
@@ -245,8 +245,6 @@ class GupshupClient:
         ----------
         app_id: str
             The id of the Gupshup application.
-        api_key: str
-            The API key of the Gupshup application.
         template_id: str
             The id of the template that will be sent to the user.
         variables: list
@@ -266,7 +264,7 @@ class GupshupClient:
         ClientConnectorError:
             Show and error if the connection fails.
         """
-        url = self.get_template.format(appId=app_id, templateId=template_id)
+        url = self.get_template_url.format(appId=app_id, templateId=template_id)
         data = await self.http.get(url, headers=headers)
 
         if data.status not in (200, 201, 202):
@@ -313,8 +311,6 @@ class GupshupClient:
         ----------
         app_id: str
             The id of the Gupshup application.
-        api_key: str
-            The API key of the Gupshup application.
         data: dict
             The data with Gupshup needed to send the message, it contains the headers, the channel,
             the source, the destination and the app name.
