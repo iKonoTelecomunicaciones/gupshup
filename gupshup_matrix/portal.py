@@ -401,7 +401,7 @@ class Portal(DBPortal, BasePortal):
                     message_data += "</div>"
                     mxid = await self.send_text_message(message_data)
 
-        elif message.payload.type == "text":
+        elif message.payload.type in ["text", "quick_reply"]:
             if evt:
                 content = await whatsapp_reply_to_matrix(body, evt, self.main_intent, self.log)
                 mxid = await self.main_intent.send_message(self.mxid, content)
@@ -951,9 +951,13 @@ class Portal(DBPortal, BasePortal):
             The value of the variables, if the template has it
         """
         gupshup_data = await self.main_data_gs
+        gupshup_app: DBGupshupApplication = await DBGupshupApplication.get_by_admin_user(
+            self.relay_user_id
+        )
 
         try:
             status, resp = await self.gsc.send_template(
+                app_id=gupshup_app.app_id,
                 data=gupshup_data,
                 template_id=template_id,
                 variables=variables,
