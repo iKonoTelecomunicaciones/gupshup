@@ -57,6 +57,7 @@ class ContentQuickReplay(SerializableAttrs):
 @dataclass
 class InteractiveMessageOption(SerializableAttrs):
     type: str = ib(default=None, metadata={"json": "type"})
+    listId: str = ib(metadata={"json": "listId"}, default="")
     buttonId: str = ib(metadata={"json": "buttonId"}, default="")
     title: str = ib(default=None, metadata={"json": "title"})
     description: str = ib(default=None, metadata={"json": "description"})
