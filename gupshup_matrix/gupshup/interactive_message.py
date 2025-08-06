@@ -1,7 +1,7 @@
 import re
 
 from attr import dataclass, ib
-from mautrix.types import SerializableAttrs, BaseMessageEventContent
+from mautrix.types import BaseMessageEventContent, SerializableAttrs
 
 
 @dataclass
@@ -145,6 +145,7 @@ class InteractiveMessage(SerializableAttrs):
                 ],
                 items=[ItemListReplay.from_dict(item) for item in data["items"]],
             )
+
 
 @dataclass
 class TemplateMessage(SerializableAttrs, BaseMessageEventContent):

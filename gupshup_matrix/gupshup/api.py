@@ -26,9 +26,7 @@ class GupshupClient:
         self.sender = config["gupshup.sender"]
         self.http = ClientSession(loop=loop)
 
-    def process_message_context(
-        self, message: dict, additional_data: dict | None = None
-    ) -> str:
+    def process_message_context(self, message: dict, additional_data: dict | None = None) -> str:
         """
         Format the message to be sent to Gupshup.
 
@@ -87,7 +85,9 @@ class GupshupClient:
 
         return message_data
 
-    def parse_template_components(self, template_gupshup_data: dict, variables: list) -> list[dict]:
+    def parse_template_components(
+        self, template_gupshup_data: dict, variables: list
+    ) -> list[dict]:
         """
         Parse the components of the template and return a list of components.
 
@@ -141,40 +141,43 @@ class GupshupClient:
             return []
 
         if container_meta.get("mediaUrl"):
-            components.append({
-                "type": "HEADER",
-                "format": template_gupshup_data.get("templateType"),
-                "example": {
-                    "header_handle": [container_meta.get("mediaUrl")]
+            components.append(
+                {
+                    "type": "HEADER",
+                    "format": template_gupshup_data.get("templateType"),
+                    "example": {"header_handle": [container_meta.get("mediaUrl")]},
                 }
-            })
+            )
 
         if container_meta.get("header"):
-            components.append({
-                "type": "HEADER",
-                "format": "TEXT",
-                "text": container_meta.get("header"),
-            })
+            components.append(
+                {
+                    "type": "HEADER",
+                    "format": "TEXT",
+                    "text": container_meta.get("header"),
+                }
+            )
 
         if container_meta.get("data"):
             message_data = self.get_message_body(container_meta, variables)
 
-            components.append({
-                "type": "BODY",
-                "text": message_data,
-            })
+            components.append(
+                {
+                    "type": "BODY",
+                    "text": message_data,
+                }
+            )
 
         if container_meta.get("footer"):
-            components.append({
-                "type": "FOOTER",
-                "text": container_meta.get("footer"),
-            })
+            components.append(
+                {
+                    "type": "FOOTER",
+                    "text": container_meta.get("footer"),
+                }
+            )
 
         if container_meta.get("buttons"):
-            components.append({
-                "type": "BUTTONS",
-                "buttons": container_meta.get("buttons", [])
-            })
+            components.append({"type": "BUTTONS", "buttons": container_meta.get("buttons", [])})
 
         if not components or len(components) == 0:
             self.log.error("No components found in the template data")
@@ -511,9 +514,7 @@ class GupshupClient:
             response_data = json.loads(response_read)
 
         templateMessage = TemplateMessage(
-            msgtype="m.template_message",
-            template_message=template_data
-
+            msgtype="m.template_message", template_message=template_data
         )
 
         return resp.status, response_data, templateMessage
