@@ -1,7 +1,7 @@
 import re
 
 from attr import dataclass, ib
-from mautrix.types import SerializableAttrs
+from mautrix.types import SerializableAttrs, BaseMessageEventContent
 
 
 @dataclass
@@ -145,3 +145,17 @@ class InteractiveMessage(SerializableAttrs):
                 ],
                 items=[ItemListReplay.from_dict(item) for item in data["items"]],
             )
+
+@dataclass
+class TemplateMessage(SerializableAttrs, BaseMessageEventContent):
+    msgtype: str = ib(default=None, metadata={"json": "msgtype"})
+    body: str = ib(default="", metadata={"json": "body"})
+    template_message: list = ib(factory=list, metadata={"json": "template_message"})
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        return cls(
+            msgtype=data.get("msgtype", ""),
+            body=data.get("body", ""),
+            template_message=data.get("template_message", []),
+        )

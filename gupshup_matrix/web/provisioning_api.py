@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Awaitable
+from collections.abc import Awaitable
 
 from aiohttp import web
 from markdown import markdown
@@ -290,15 +290,14 @@ class ProvisioningAPI:
                 headers=self._acao_headers,
             )
 
-        msg_event_id = await portal.az.intent.send_message(portal.mxid, msg)
         if template_id:
-            await portal.handle_matrix_template(
+            msg_event_id = await portal.handle_matrix_template(
                 sender=user,
-                event_id=msg_event_id,
                 template_id=template_id,
                 variables=template_variables,
             )
         else:
+            msg_event_id = await portal.az.intent.send_message(portal.mxid, msg)
             await portal.handle_matrix_message(
                 sender=user,
                 message=msg,
