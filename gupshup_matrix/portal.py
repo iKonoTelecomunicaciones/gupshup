@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 from string import Template
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import asyncpg
 from aiohttp import ClientConnectorError
@@ -55,25 +55,25 @@ if TYPE_CHECKING:
 StateBridge = EventType.find("m.bridge", EventType.Class.STATE)
 StateHalfShotBridge = EventType.find("uk.half-shot.bridge", EventType.Class.STATE)
 
-InviteList = Union[UserID, List[UserID]]
+InviteList = UserID | list[UserID]
 
 
 class Portal(DBPortal, BasePortal):
-    by_mxid: Dict[RoomID, "Portal"] = {}
-    by_chat_id: Dict[RoomID, "Portal"] = {}
-    by_chat_id: Dict[str, "Portal"] = {}
+    by_mxid: dict[RoomID, "Portal"] = {}
+    by_chat_id: dict[RoomID, "Portal"] = {}
+    by_chat_id: dict[str, "Portal"] = {}
 
     message_template: Template
     federate_rooms: bool
-    invite_users: List[UserID]
-    initial_state: Dict[str, Dict[str, Any]]
+    invite_users: list[UserID]
+    initial_state: dict[str, dict[str, Any]]
     auto_change_room_name: bool
 
     az: AppService
     private_chat_portal_meta: bool
     gsc: GupshupClient
 
-    _main_intent: Optional[IntentAPI] | None
+    _main_intent: IntentAPI | None
     _create_room_lock: asyncio.Lock
     _send_lock: asyncio.Lock
 
@@ -83,8 +83,8 @@ class Portal(DBPortal, BasePortal):
     def __init__(
         self,
         chat_id: str,
-        phone: Optional[str] = None,
-        mxid: Optional[RoomID] = None,
+        phone: str | None = None,
+        mxid: RoomID | None = None,
         relay_user_id: UserID | None = None,
     ) -> None:
         super().__init__(chat_id, phone, mxid, relay_user_id)
@@ -104,7 +104,7 @@ class Portal(DBPortal, BasePortal):
         return self._main_intent
 
     @property
-    async def main_data_gs(self) -> Dict:
+    async def main_data_gs(self) -> dict:
         gs_app_name, _ = self.chat_id.split("-")
         try:
             gs_app = await DBGupshupApplication.get_by_name(name=gs_app_name)
@@ -144,7 +144,7 @@ class Portal(DBPortal, BasePortal):
         cls.private_chat_portal_meta = cls.config["bridge.private_chat_portal_meta"]
         cls.gsc = bridge.gupshup_client
 
-    def send_text_message(self, message: GupshupMessageEvent) -> Optional["Portal"]:
+    def send_text_message(self, message: GupshupMessageEvent) -> Portal | None:
         html, text = whatsapp_to_matrix(message)
         content = TextMessageEventContent(msgtype=MessageType.TEXT, body=text)
         if html is not None:
@@ -267,7 +267,7 @@ class Portal(DBPortal, BasePortal):
         return f"com.github.gupshup://gupshup/{self.phone}"
 
     @property
-    def bridge_info(self) -> Dict[str, Any]:
+    def bridge_info(self) -> dict[str, Any]:
         return {
             "bridgebot": self.az.bot_mxid,
             "creator": self.main_intent.mxid,
@@ -555,8 +555,11 @@ class Portal(DBPortal, BasePortal):
         sender: "u.User",
         message: MessageEventContent,
         event_id: EventID,
-        additional_data: Optional[dict] = {},
+        additional_data: dict | None = None,
     ) -> None:
+        if additional_data is None:
+            additional_data = {}
+
         if message.msgtype == "m.interactive_message":
             interactive_message = message.get("interactive_message", {}).serialize()
             event_content: InteractiveMessage = InteractiveMessage.from_dict(
@@ -657,7 +660,7 @@ class Portal(DBPortal, BasePortal):
             self._main_intent = self.az.intent
 
     @classmethod
-    async def get_by_mxid(cls, mxid: RoomID) -> Optional["Portal"]:
+    async def get_by_mxid(cls, mxid: RoomID) -> Portal | None:
         try:
             return cls.by_mxid[mxid]
         except KeyError:
@@ -671,7 +674,7 @@ class Portal(DBPortal, BasePortal):
         return None
 
     @classmethod
-    async def get_by_chat_id(cls, chat_id: str, create: bool = True) -> Optional["Portal"]:
+    async def get_by_chat_id(cls, chat_id: str, create: bool = True) -> Portal | None:
         try:
             return cls.by_chat_id[chat_id]
         except KeyError:
@@ -787,7 +790,7 @@ class Portal(DBPortal, BasePortal):
             The event ID of the reaction event
         room_id: RoomID
             The room ID of the room where the reaction was sent
-        content: Dict
+        content: dict
             The content of the reaction event
         """
         message: DBMessage = await DBMessage.get_by_mxid(message_mxid, room_id)
@@ -874,7 +877,7 @@ class Portal(DBPortal, BasePortal):
 
         await DBReaction.delete_by_event_mxid(message.event_mxid, self.mxid, user.mxid)
 
-    async def get_joined_users(self) -> List[UserID] | None:
+    async def get_joined_users(self) -> list[UserID] | None:
         """get a list of all users in the room
 
         Returns
@@ -932,9 +935,8 @@ class Portal(DBPortal, BasePortal):
     async def handle_matrix_template(
         self,
         sender: u.User,
-        event_id: EventID,
         template_id: str,
-        variables: Optional[list[str]] = [],
+        variables: list[str] | None = None,
     ) -> None:
         """
         Send a template to user in WhatsApp
@@ -943,20 +945,21 @@ class Portal(DBPortal, BasePortal):
         ----------
         sender: User
             The user who sent the message
-        event_id: EventID
-            The id of the event of the message sended to Matrix
         template_id: str
             The id of the template that Gupshup use to send the message
-        variables: Optional[list]
+        variables: list[str] | None
             The value of the variables, if the template has it
         """
+        if not variables:
+            variables = []
+
         gupshup_data = await self.main_data_gs
         gupshup_app: DBGupshupApplication = await DBGupshupApplication.get_by_admin_user(
             self.relay_user_id
         )
 
         try:
-            status, resp = await self.gsc.send_template(
+            status, resp, template_message = await self.gsc.send_template(
                 app_id=gupshup_app.app_id,
                 data=gupshup_data,
                 template_id=template_id,
@@ -966,18 +969,27 @@ class Portal(DBPortal, BasePortal):
             self.log.error(f"Error sending template: {e}")
             return
 
-        if status == 202:
-            await DBMessage(
-                mxid=event_id,
-                mx_room=self.mxid,
-                sender=self.gs_source,
-                gsid=GupshupMessageID(resp.get("messageId")),
-                gs_app=self.gs_app,
-            ).insert()
-        else:
+        if status != 202:
             message = resp.get("message")
 
-            if type(message) == dict:
+            if isinstance(message, dict):
                 message = message.get("message")
 
             await self.main_intent.send_notice(self.mxid, f"Error sending template {message}")
+            return
+
+        if not template_message:
+            self.log.error("No template message returned in handle_matrix_template, ignoring...")
+            return
+
+        event_id = await self.az.intent.send_message(self.mxid, template_message)
+
+        await DBMessage(
+            mxid=event_id,
+            mx_room=self.mxid,
+            sender=sender.mxid,
+            gsid=GupshupMessageID(resp.get("messageId")),
+            gs_app=self.gs_app,
+        ).insert()
+
+        return event_id

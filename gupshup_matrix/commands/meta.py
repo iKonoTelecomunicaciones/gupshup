@@ -99,13 +99,10 @@ async def template(evt: CommandEvent) -> EventID:
     if not portal:
         return await evt.reply(f"Failed to get room {room_id}")
 
-    msg_event_id = await portal.az.intent.send_message(
-        portal.mxid, msg
-    )  # only be visible to the agent
+    # only be visible to the agent
     await portal.handle_matrix_template(
         sender=evt.sender,
         message=msg,
-        event_id=msg_event_id,
     )
 
 

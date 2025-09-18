@@ -1,10 +1,12 @@
 import asyncio
 import json
 import logging
-from typing import Dict, Optional
+import re
 
 from aiohttp import ClientConnectorError, ClientSession, ContentTypeError, FormData
 from mautrix.types import MessageType
+
+from gupshup_matrix.gupshup.interactive_message import TemplateMessage
 
 from ..config import Config
 from ..db import GupshupApplication as DBGupshupApplication
@@ -24,9 +26,7 @@ class GupshupClient:
         self.sender = config["gupshup.sender"]
         self.http = ClientSession(loop=loop)
 
-    def process_message_context(
-        self, message: Dict, additional_data: Optional[Dict] = None
-    ) -> str:
+    def process_message_context(self, message: dict, additional_data: dict | None = None) -> str:
         """
         Format the message to be sent to Gupshup.
 
@@ -47,15 +47,153 @@ class GupshupClient:
 
         return json.dumps(message)
 
+    def get_message_body(self, container_meta: dict, variables: list) -> str:
+        """
+        Get the message body from the container meta and variables.
+
+        Parameters
+        ----------
+        container_meta: dict
+            The container meta data from the Gupshup template.
+        variables: list
+            The variables that will be used in the template.
+
+        Returns
+        -------
+        str
+            The message body with the variables replaced.
+        """
+        if not container_meta or not container_meta.get("data"):
+            return ""
+
+        message_data = container_meta.get("data", "")
+
+        if not variables or len(variables) == 0:
+            return message_data
+
+        # Get the variables of the template message, each variable is in the format {{name}} or
+        # {{1}}
+        message_variables = re.findall(r"{{[a-z0-9_]+}}", message_data)
+        total_message_variables = len(message_variables)
+        message = re.sub(r"{{[a-z0-9_]+}}", "{}", message_data)
+
+        # If the template has variables, replace the variable and add it to the message
+        try:
+            message_data = message.format(*variables[:total_message_variables])
+        except KeyError:
+            pass
+
+        return message_data
+
+    def parse_template_components(
+        self, template_gupshup_data: dict, variables: list
+    ) -> list[dict]:
+        """
+        Parse the components of the template and return a list of components.
+
+        This is used to use our own template format, that is a list of components, instead of the
+        Gupshup template format, this template format is like
+        [
+            {
+                "type": "HEADER",
+                "format": "TEXT",
+                "text": "some text",
+                "example": {"header_handle": ["https://example.com/image.jpg"]}
+            },
+            {
+                "type": "BODY",
+                "text": "some text with {{1}} variable",
+                "example": {
+                    "body_text_named_params": [
+                        {
+                            "param_name": "nombre",
+                            "example": "John Doe"
+                        }
+                    ]
+                }
+            },
+            {
+                "type": "FOOTER",
+                "text": "some footer text",
+            },
+            {
+                "type": "BUTTONS",
+                "buttons": [
+                    {"type": "quick_reply", "text": "{{2}}"},
+                    {"type": "url", "text": "{{3}}", "url": "https://example.com"}
+                ]
+            }
+        ]
+        """
+        if not template_gupshup_data:
+            self.log.error("No template data found to parse with the template format")
+            return []
+
+        components = []
+        try:
+            container_meta = json.loads(template_gupshup_data.get("containerMeta"))
+        except json.JSONDecodeError as e:
+            self.log.error(f"Error decoding JSON from template data: {e}")
+            return []
+
+        if not container_meta:
+            self.log.error("No containerMeta found in the template data")
+            return []
+
+        if container_meta.get("mediaUrl"):
+            components.append(
+                {
+                    "type": "HEADER",
+                    "format": template_gupshup_data.get("templateType"),
+                    "example": {"header_handle": [container_meta.get("mediaUrl")]},
+                }
+            )
+
+        if container_meta.get("header"):
+            components.append(
+                {
+                    "type": "HEADER",
+                    "format": "TEXT",
+                    "text": container_meta.get("header"),
+                }
+            )
+
+        if container_meta.get("data"):
+            message_data = self.get_message_body(container_meta, variables)
+
+            components.append(
+                {
+                    "type": "BODY",
+                    "text": message_data,
+                }
+            )
+
+        if container_meta.get("footer"):
+            components.append(
+                {
+                    "type": "FOOTER",
+                    "text": container_meta.get("footer"),
+                }
+            )
+
+        if container_meta.get("buttons"):
+            components.append({"type": "BUTTONS", "buttons": container_meta.get("buttons", [])})
+
+        if not components or len(components) == 0:
+            self.log.error("No components found in the template data")
+            return []
+
+        return components
+
     async def send_message(
         self,
-        data: Dict,
-        body: Optional[str] = None,
-        msgtype: Optional[str] = None,
-        media: Optional[str] = None,
-        file_name: Optional[str] = "",
-        additional_data: Optional[Dict] = {},
-    ) -> Dict[str, str]:
+        data: dict,
+        body: str | None = None,
+        msgtype: str | None = None,
+        media: str | None = None,
+        file_name: str | None = None,
+        additional_data: dict | None = None,
+    ) -> dict[str, str]:
         """
         Send a message to a user.
 
@@ -64,13 +202,13 @@ class GupshupClient:
         data: dict
             The data with Gupshup needed to send the message, it contains the headers, the channel,
             the source, the destination and the app name.
-        body: Optional[str]
+        body: str | None
             The text of the message or the name of the file if the message is a file.
-        msgtype: Optional[str]
+        msgtype: str | None
             The type of the message, it can be a text message, a file, an image, a video, etc.
-        media: Optional[str]
+        media: str | None
             The url of the media if the message is a file, an image, a video, etc.
-        additional_data: Optional[dict]
+        additional_data: dict | None
             Contains the id of the message that the user is replying to.
 
         Exceptions
@@ -78,6 +216,11 @@ class GupshupClient:
         ClientConnectorError:
             Show and error if the connection fails.
         """
+        if additional_data is None:
+            additional_data = {}
+        if file_name is None:
+            file_name = ""
+
         headers = data.pop("headers")
 
         # If the message is a interactive message, the additional_data is a dict with the quick
@@ -155,8 +298,8 @@ class GupshupClient:
             self.log.debug(f"Message {message_id} marked as read")
 
     async def send_location(
-        self, data: Dict, data_location: Dict, additional_data: Optional[Dict] = {}
-    ) -> Dict[str, str]:
+        self, data: dict, data_location: dict, additional_data: dict | None = None
+    ) -> dict[str, str]:
         """
         Send a location to a user.
 
@@ -169,7 +312,7 @@ class GupshupClient:
         data_location : dict
             Contains the location that will be sent to the user.
 
-        additional_data : Optional[dict]
+        additional_data : dict | None
             Contains the id of the message that the user is replying to, it is used only for
             replies.
         Exceptions
@@ -177,6 +320,9 @@ class GupshupClient:
         ClientConnectorError:
             Show and error if the connection fails.
         """
+        if additional_data is None:
+            additional_data = {}
+
         headers = data.pop("headers")
 
         # Get the latitude and longitude from the geo_uri
@@ -237,7 +383,7 @@ class GupshupClient:
         variables: list,
         headers: dict,
         form_data: FormData,
-    ) -> dict:
+    ) -> list[dict]:
         """
         Get the template data from Gupshup.
 
@@ -271,10 +417,14 @@ class GupshupClient:
             self.log.error(
                 f"Error getting template {template_id}: {data.status} - {await data.text()}"
             )
-            return {}
+            return []
 
         response = await data.json()
         template_gupshup_data = response.get("template")
+
+        if template_gupshup_data:
+            template_data = self.parse_template_components(template_gupshup_data, variables)
+            self.log.debug(f"Parsed template data with {len(template_data)} components")
 
         form_data.add_field(
             "template",
@@ -301,6 +451,8 @@ class GupshupClient:
                 ),
             )
 
+        return template_data
+
     async def send_template(
         self, app_id: str, data: dict, template_id: str, variables: list
     ) -> dict:
@@ -323,6 +475,10 @@ class GupshupClient:
         -------
         response_data: dict
             The response of the request to Gupshup.
+        response_status: int
+            The status code of the response.
+        template_message: TemplateEvent
+            The message that was sent to matrix.
 
         Exceptions
         ----------
@@ -331,10 +487,11 @@ class GupshupClient:
         """
         headers = data.pop("headers")
         form_data = FormData()
+
         for key, value in data.items():
             form_data.add_field(key, str(value))
 
-        await self.get_body_of_template(
+        template_data = await self.get_body_of_template(
             app_id=app_id,
             template_id=template_id,
             variables=variables,
@@ -356,4 +513,8 @@ class GupshupClient:
             response_read = await resp.read()
             response_data = json.loads(response_read)
 
-        return resp.status, response_data
+        templateMessage = TemplateMessage(
+            msgtype="m.template_message", template_message=template_data
+        )
+
+        return resp.status, response_data, templateMessage
