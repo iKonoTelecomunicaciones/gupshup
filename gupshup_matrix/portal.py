@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import re
-from cgitb import text
 from datetime import datetime
 from string import Template
 from typing import TYPE_CHECKING, Any, cast
