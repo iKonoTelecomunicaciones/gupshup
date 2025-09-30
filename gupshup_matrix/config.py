@@ -60,7 +60,6 @@ class Config(BaseBridgeConfig):
         copy("gupshup.get_template_url")
         copy("gupshup.file_name")
         copy("gupshup.partner_app_token")
-        copy("gupshup.app_id")
 
         copy_dict("quick_reply")
 

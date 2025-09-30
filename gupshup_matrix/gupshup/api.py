@@ -25,10 +25,11 @@ class GupshupClient:
         self.media_url = config["gupshup.media_url"]
         self.sender = config["gupshup.sender"]
         self.partner_app_token = config["gupshup.partner_app_token"]
-        self.app_id = config["gupshup.app_id"]
         self.http = ClientSession(loop=loop)
 
-    async def upload_media(self, data: bytes, file_type: str, file_name: str = "media") -> dict:
+    async def upload_media(
+        self, data: bytes, appId: str, file_type: str, file_name: str = "media"
+    ) -> dict:
         """
         Upload media to Gupshup.
 
@@ -36,6 +37,8 @@ class GupshupClient:
         ----------
         data: bytes
             The media data to be uploaded.
+        appId: str
+            The Gupshup application ID.
         file_type: str
             The type of the media file, e.g. "image/jpeg".
         file_name: str
@@ -58,7 +61,7 @@ class GupshupClient:
             content_type="application/octet-stream",
         )
         form_data.add_field("file_type", file_type)
-        url = self.media_url.format(appId=self.app_id)
+        url = self.media_url.format(appId=appId)
 
         # Send the media to the Gupshup API
         response: ClientSession = await self.http.post(url, data=form_data, headers=headers)
