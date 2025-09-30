@@ -8,19 +8,18 @@ from typing import TYPE_CHECKING, Any, cast
 import asyncpg
 from aiohttp import ClientConnectorError
 from markdown import markdown
+from mautrix.api import ClientPath, MediaPath, Method
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal
 from mautrix.errors import MUnknown
 from mautrix.types import (
     EventID,
     EventType,
-    FileInfo,
     Format,
     MessageType,
+    Obj,
     PowerLevelStateEventContent,
     ReactionEventContent,
-    RelatesTo,
-    RelationType,
     RoomID,
     UserID,
 )
@@ -30,6 +29,7 @@ from mautrix.types.event import (
     MessageEventContent,
     TextMessageEventContent,
 )
+from mautrix.util import magic
 
 from gupshup_matrix.formatter.from_matrix import matrix_to_whatsapp
 from gupshup_matrix.gupshup.data import ChatInfo, GupshupPayload
@@ -96,6 +96,7 @@ class Portal(DBPortal, BasePortal):
         self._relay_user = None
         self.error_codes = self.config["gupshup.error_codes"]
         self.homeserver_address = self.config["homeserver.public_address"]
+        self.as_token = self.config["appservice.as_token"]
 
     @property
     def main_intent(self) -> IntentAPI:
@@ -297,6 +298,58 @@ class Portal(DBPortal, BasePortal):
     async def save(self) -> None:
         await self.update()
 
+    async def get_content_uri(self, data: bytes) -> str:
+        """
+        Upload the media to synapse and get the mxc from synapse
+        Parameters
+        ----------
+        data: bytes
+            The data containing the ids of the media that whatsapp cloud api returns
+        Returns
+        -------
+            The mxc url of the media
+        """
+        # Upload the message media to Matrix
+        path = MediaPath.v1.create
+        method = Method.POST
+        mime_type = None
+        headers = {}
+
+        if isinstance(data, bytes):
+            mime_type = magic.mimetype(data)
+
+        if mime_type:
+            headers["Content-Type"] = mime_type
+
+        response = await self.main_intent.api.request(method, path, content=data, headers=headers)
+        attachment = response.get("content_uri")
+
+        return attachment
+
+    async def get_media_url(self, data: bytes) -> tuple[str, str]:
+        """
+        Upload the media to synapse and get the mxc from synapse
+        Parameters
+        ----------
+        data: bytes
+            The data containing the ids of the media that whatsapp cloud api returns
+        Returns
+        -------
+            The mxc url of the media and the type of the media
+        """
+        headers = {}
+        if isinstance(data, bytes):
+            message_type = magic.mimetype(data)
+            headers["Content-Type"] = message_type
+
+        mxc = await self.get_content_uri(data)
+        server_name, media_matrix_id = self.main_intent.api.parse_mxc_uri(mxc)
+        path = MediaPath.v3.upload[server_name][media_matrix_id]
+        method = Method.PUT
+        await self.main_intent.api.request(method, path, content=data, headers=headers)
+
+        return mxc, message_type
+
     async def handle_gupshup_message(
         self, source: u.User, info: ChatInfo, message: GupshupMessageEvent
     ) -> None:
@@ -336,13 +389,19 @@ class Portal(DBPortal, BasePortal):
             resp = await self.az.http_session.get(message.payload.body.url)
             data = await resp.read()
             try:
-                mxc = await self.main_intent.upload_media(data=data)
+                mxc, media_type = await self.get_media_url(data)
             except MUnknown as e:
                 self.log.exception(f"{message} :: error {e}")
                 return
             except Exception as e:
                 self.log.exception(f"Message not receive :: error {e}")
                 return
+
+            media_name = message.payload.body.caption
+
+            if not media_name and media_type:
+                ext = media_type.split("/")[-1]
+                media_name = f"{self.config['gupshup.file_name']}.{ext}"
 
             if message.payload.type in ("image", "video"):
                 msgtype = (
@@ -351,7 +410,10 @@ class Portal(DBPortal, BasePortal):
                 msgbody = message.payload.body.caption if message.payload.body.caption else ""
 
                 content_image = MediaMessageEventContent(
-                    body="", msgtype=msgtype, url=mxc, info=FileInfo(size=len(data))
+                    body=media_name,
+                    msgtype=msgtype,
+                    url=mxc,
+                    info=Obj(size=len(data), mimetype=media_type),
                 )
 
                 if evt:
@@ -366,13 +428,12 @@ class Portal(DBPortal, BasePortal):
                 msgtype = (
                     MessageType.AUDIO if message.payload.type == "audio" else MessageType.FILE
                 )
-                msgbody = message.payload.body.caption if message.payload.body.caption else ""
 
                 content = MediaMessageEventContent(
-                    body=msgbody,
+                    body=media_name,
                     msgtype=msgtype,
                     url=mxc,
-                    info=FileInfo(size=len(data)),
+                    info=Obj(size=len(data), mimetype=media_type),
                 )
 
                 if evt:
@@ -384,8 +445,10 @@ class Portal(DBPortal, BasePortal):
 
             elif message.payload.type == "sticker":
                 msgtype = MessageType.STICKER
-                info = FileInfo(size=len(data))
-                mxid = await self.main_intent.send_sticker(room_id=self.mxid, url=mxc, info=info)
+                info = Obj(size=len(data), mimetype=media_type)
+                mxid = await self.main_intent.send_sticker(
+                    room_id=self.mxid, url=mxc, info=info, text=media_name
+                )
 
         elif message.payload.type == "contact":
             for contact in message.payload.body.contacts:
@@ -550,6 +613,72 @@ class Portal(DBPortal, BasePortal):
             created_at=datetime.now(),
         ).insert()
 
+    async def get_media(self, mxc: str) -> tuple[bytes, str]:
+        """
+        Given a mxc url, it gets the media from the mxc server.
+        Parameters
+        ----------
+        mxc : str
+            The mxc url of the media.
+        Returns
+        -------
+        tuple[bytes, str]
+            The media file and its name.
+        """
+        server_name, media_matrix_id = self.main_intent.api.parse_mxc_uri(mxc)
+        path = ClientPath.v1.media.download[server_name][media_matrix_id]
+        url = f"{self.homeserver_address}/{path.__str__()}"
+        method = Method.GET
+        headers = {
+            "Authorization": f"Bearer {self.as_token}",
+        }
+        response = await self.main_intent.api.session.request(str(method), url, headers=headers)
+
+        if response.status != 200:
+            raise Exception(f"Failed to download media: {response.status}")
+
+        file_name = response.headers.get("Content-Disposition", "file")
+        media_name = (
+            file_name.split("filename=")[-1]
+            if "filename=" in file_name
+            else self.config["gupshup.file_name"]
+        )
+        data = await response.read()
+
+        return data, media_name
+
+    async def get_media_id(self, mxc: str) -> tuple[str, str]:
+        """
+        Given a mxc url, it gets the media and update it to meta to get an id.
+        Parameters
+        ----------
+        mxc : str
+            The mxc url of the media.
+        Returns
+        -------
+        str
+            The id of the media and its name.
+        """
+        # We get the media file
+        self.log.debug(f"Getting media from mxc: {mxc}")
+        data, media_name = await self.get_media(mxc)
+
+        media_type = magic.mimetype(data)
+
+        if not media_name:
+            ext = media_type.split("/")[-1]
+            media_name = f"{self.config['gupshup.file_name']}.{ext}"
+
+        self.log.debug(f"Uploading media to Gupshup: {media_name}, type: {media_type}")
+        response = await self.gsc.upload_media(data, file_name=media_name, file_type=media_type)
+
+        self.log.debug(f"Response from Gupshup in upload_media: {response}")
+
+        if not response or "mediaId" not in response:
+            raise Exception(f"Failed to get the media id, no id in response {response}")
+
+        return response["mediaId"], media_name
+
     async def handle_matrix_message(
         self,
         sender: "u.User",
@@ -606,15 +735,16 @@ class Portal(DBPortal, BasePortal):
             MessageType.IMAGE,
             MessageType.FILE,
         ):
-            url = f"{self.homeserver_address}/_matrix/media/r0/download/{message.url[6:]}"
-            if message.info and message.info.mimetype == "application/pdf":
-                file_name = f"{self.config['gupshup.file_name']}.pdf"
-            else:
-                file_name = self.config["gupshup.file_name"]
+            try:
+                media_id, file_name = await self.get_media_id(message.url)
+            except Exception as e:
+                self.log.error(f"Error getting the media id: {e}")
+                await self.main_intent.send_notice(self.mxid, f"Error getting media id: {e}")
+                return
 
             resp = await self.gsc.send_message(
                 data=gupshup_data,
-                media=url,
+                media_id=media_id,
                 body=message.body,
                 msgtype=message.msgtype,
                 file_name=file_name,

@@ -22,9 +22,53 @@ class GupshupClient:
         self.read_url = config["gupshup.read_url"]
         self.template_url = config["gupshup.template_url"]
         self.get_template_url = config["gupshup.get_template_url"]
-        self.app_name = config["gupshup.app_name"]
+        self.media_url = config["gupshup.media_url"]
         self.sender = config["gupshup.sender"]
+        self.partner_app_token = config["gupshup.partner_app_token"]
+        self.app_id = config["gupshup.app_id"]
         self.http = ClientSession(loop=loop)
+
+    async def upload_media(self, data: bytes, file_type: str, file_name: str = "media") -> dict:
+        """
+        Upload media to Gupshup.
+
+        Parameters
+        ----------
+        data: bytes
+            The media data to be uploaded.
+        file_type: str
+            The type of the media file, e.g. "image/jpeg".
+        file_name: str
+            The name of the media file.
+
+        Returns
+        -------
+        dict
+            The response from the Gupshup API.
+        """
+        form_data = FormData()
+        headers = {
+            "token": self.partner_app_token,
+        }
+
+        form_data.add_field(
+            "file",
+            data,
+            filename=file_name,
+            content_type="application/octet-stream",
+        )
+        form_data.add_field("file_type", file_type)
+        url = self.media_url.format(appId=self.app_id)
+
+        # Send the media to the Gupshup API
+        response: ClientSession = await self.http.post(url, data=form_data, headers=headers)
+
+        self.log.debug(
+            f"Response status from Gupshup in upload_media: {response.status}, "
+            f"response: {await response.text()}"
+        )
+        data = await response.json()
+        return data
 
     def process_message_context(self, message: dict, additional_data: dict | None = None) -> str:
         """
@@ -190,7 +234,7 @@ class GupshupClient:
         data: dict,
         body: str | None = None,
         msgtype: str | None = None,
-        media: str | None = None,
+        media_id: str | None = None,
         file_name: str | None = None,
         additional_data: dict | None = None,
     ) -> dict[str, str]:
@@ -206,8 +250,8 @@ class GupshupClient:
             The text of the message or the name of the file if the message is a file.
         msgtype: str | None
             The type of the message, it can be a text message, a file, an image, a video, etc.
-        media: str | None
-            The url of the media if the message is a file, an image, a video, etc.
+        media_id: str | None
+            The id of the media if the message is a file, an image, a video, etc.
         additional_data: dict | None
             Contains the id of the message that the user is replying to.
 
@@ -232,18 +276,18 @@ class GupshupClient:
             if body and msgtype == MessageType.TEXT:
                 message_dict = {"type": "text", "text": body}
 
-            if media:
+            if media_id:
                 if msgtype == MessageType.IMAGE:
-                    message_dict = {"type": "image", "originalUrl": media, "previewUrl": media}
+                    message_dict = {"type": "image", "id": media_id}
 
                 elif msgtype == MessageType.VIDEO:
-                    message_dict = {"type": "video", "url": media}
+                    message_dict = {"type": "video", "id": media_id}
 
                 elif msgtype == MessageType.AUDIO:
-                    message_dict = {"type": "audio", "url": media}
+                    message_dict = {"type": "audio", "id": media_id}
 
                 elif msgtype == MessageType.FILE:
-                    message_dict = {"type": "file", "url": media, "filename": file_name}
+                    message_dict = {"type": "file", "id": media_id, "filename": file_name}
 
                 if body:
                     message_dict["caption"] = body

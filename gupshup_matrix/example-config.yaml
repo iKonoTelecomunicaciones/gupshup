@@ -146,7 +146,10 @@ gupshup:
     read_url: https://api.gupshup.io/wa/app/{appId}/msg/{msgId}/read
     template_url: https://api.gupshup.io/wa/api/v1/template/msg
     get_template_url: https://api.gupshup.io/wa/app/{appId}/template/{templateId}
+    media_url: https://partner.gupshup.io/partner/app/{appId}/media
     file_name: Archivo
+    partner_app_token: YOUR_PARTNER_APP_TOKEN
+    app_id: YOUR_APP_ID
     # Path prefix for webhook endpoints. Subpaths are /status and /receive.
     # Note that the webhook must be put behind a reverse proxy with https.
     webhook_path: /gupshup
