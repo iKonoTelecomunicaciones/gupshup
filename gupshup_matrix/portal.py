@@ -647,6 +647,19 @@ class Portal(DBPortal, BasePortal):
 
         return data, media_name
 
+    async def get_gupshup_app(self) -> DBGupshupApplication | None:
+        gs_app_name, _ = self.chat_id.split("-")
+        try:
+            gs_app: DBGupshupApplication = await DBGupshupApplication.get_by_name(name=gs_app_name)
+        except Exception as e:
+            self.log.exception(e)
+            return
+
+        if not gs_app:
+            raise Exception(f"Application {gs_app_name} not found")
+
+        return gs_app
+
     async def get_media_id(self, mxc: str) -> tuple[str, str]:
         """
         Given a mxc url, it gets the media and update it to meta to get an id.
@@ -661,6 +674,7 @@ class Portal(DBPortal, BasePortal):
         """
         # We get the media file
         self.log.debug(f"Getting media from mxc: {mxc}")
+        gupshup_app = await self.get_gupshup_app()
         data, media_name = await self.get_media(mxc)
 
         media_type = magic.mimetype(data)
@@ -670,7 +684,9 @@ class Portal(DBPortal, BasePortal):
             media_name = f"{self.config['gupshup.file_name']}.{ext}"
 
         self.log.debug(f"Uploading media to Gupshup: {media_name}, type: {media_type}")
-        response = await self.gsc.upload_media(data, file_name=media_name, file_type=media_type)
+        response = await self.gsc.upload_media(
+            data, appId=gupshup_app.app_id, file_name=media_name, file_type=media_type
+        )
 
         self.log.debug(f"Response from Gupshup in upload_media: {response}")
 

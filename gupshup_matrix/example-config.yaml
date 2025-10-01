@@ -149,7 +149,7 @@ gupshup:
     media_url: https://partner.gupshup.io/partner/app/{appId}/media
     file_name: Archivo
     partner_app_token: YOUR_PARTNER_APP_TOKEN
-    app_id: YOUR_APP_ID
+
     # Path prefix for webhook endpoints. Subpaths are /status and /receive.
     # Note that the webhook must be put behind a reverse proxy with https.
     webhook_path: /gupshup
