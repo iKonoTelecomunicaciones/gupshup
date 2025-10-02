@@ -397,11 +397,11 @@ class Portal(DBPortal, BasePortal):
                 self.log.exception(f"Message not receive :: error {e}")
                 return
 
-            media_name = message.payload.body.caption
-
-            if not media_name and media_type:
+            if media_type:
                 ext = media_type.split("/")[-1]
                 media_name = f"{self.config['gupshup.file_name']}.{ext}"
+            else:
+                media_name = self.config["gupshup.file_name"]
 
             if message.payload.type in ("image", "video"):
                 msgtype = (
