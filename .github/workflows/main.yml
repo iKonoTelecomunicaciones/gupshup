@@ -10,7 +10,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: actions/setup-python@v5
       with:
-        python-version: "3.10"
+        python-version: "3.12"
     - uses: isort/isort-action@master
       with:
         sort-paths: "./gupshup_matrix"
@@ -18,7 +18,6 @@ jobs:
       with:
         src: "./gupshup_matrix"
         version: "24.4.2"
-        black_args: ["--target-version", "py310"]
     - name: pre-commit
       run: |
         pip install pre-commit
