@@ -1,6 +1,7 @@
 import re
 from typing import Match, Optional, Tuple
 
+from markdown import markdown
 from mautrix.appservice import IntentAPI
 from mautrix.errors import MatrixRequestError
 from mautrix.types import (
@@ -11,6 +12,8 @@ from mautrix.types import (
     RelationType,
     TextMessageEventContent,
 )
+
+from gupshup_matrix.gupshup.interactive_message import InteractiveMessage, TemplateMessage
 
 from ..db import Message
 from ..puppet import Puppet as pu
@@ -116,6 +119,15 @@ async def _add_reply_header(
 
     try:
         event: MessageEvent = await main_intent.get_event(msg.mx_room, msg.mxid)
+        # If the message is an interactive message, we need to convert it to a text message
+        if event.content.msgtype in ["m.interactive_message", "m.template_message"]:
+            message_type = (
+                "interactive_message"
+                if event.content.msgtype == "m.interactive_message"
+                else "template_message"
+            )
+            event.content = create_text_body(event, message_type)
+
         if isinstance(event.content, TextMessageEventContent):
             event.content.trim_reply_fallback()
         puppet = await pu.get_by_mxid(event.sender, create=False)
@@ -123,3 +135,40 @@ async def _add_reply_header(
     except MatrixRequestError:
         log.exception("Failed to get event to add reply fallback")
         pass
+
+
+def create_text_body(event: MessageEvent, message_type: str) -> MessageEvent:
+    """
+    Converts an interactive body message or template message to a text body message
+
+    Obtain the body of the message event and convert it to a text body message for send
+    it to Matrix
+
+    Parameters:
+    -----------
+    event: MessageEvent - MessageEvent
+        Event that contains the interactive message or template message
+    message_type: str - str
+        Type of message, can be "interactive_message" or "template_message"
+    """
+    message = {}
+    body: str = ""
+
+    match message_type:
+        case "interactive_message":
+            message = InteractiveMessage.from_dict(event.content.get(message_type, {}))
+            body = message.content.text if message.type == "quick_reply" else message.body
+        case "template_message":
+            template_message = TemplateMessage(**event.content.serialize()).template_message
+            body = next(
+                (item["text"] for item in template_message if item.get("type") == "BODY"), ""
+            )
+
+    event.content = TextMessageEventContent(
+        body=body,
+        msgtype=MessageType.TEXT,
+        formatted_body=markdown(body.replace("\n", "<br>")),
+        format=Format.HTML,
+    )
+
+    return event.content

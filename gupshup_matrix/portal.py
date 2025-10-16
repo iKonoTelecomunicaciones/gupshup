@@ -478,9 +478,9 @@ class Portal(DBPortal, BasePortal):
                     # que contiene el número de la opción seleccionada
                     body = message.payload.body.reply_message.split()[-1]
                 else:
-                    body = message.payload.body.title.lower()
+                    body = message.payload.body.title
             elif message.payload.type == "list_reply":
-                body = message.payload.body.postback_text
+                body = message.payload.body.title
 
             mxid = await self.send_text_message(body)
 
