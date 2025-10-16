@@ -18,7 +18,7 @@ jobs:
       with:
         src: "./gupshup_matrix"
         version: "24.4.2"
-        args: ["--target-version", "py310"]
+        black_args: ["--target-version", "py310"]
     - name: pre-commit
       run: |
         pip install pre-commit
