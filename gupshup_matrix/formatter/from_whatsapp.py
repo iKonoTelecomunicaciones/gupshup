@@ -136,6 +136,7 @@ async def _add_reply_header(
         log.exception("Failed to get event to add reply fallback")
         pass
 
+
 def create_text_body(event: MessageEvent, message_type: str) -> MessageEvent:
     """
     Converts an interactive body message or template message to a text body message
@@ -156,11 +157,7 @@ def create_text_body(event: MessageEvent, message_type: str) -> MessageEvent:
     match message_type:
         case "interactive_message":
             message = InteractiveMessage.from_dict(event.content.get(message_type, {}))
-            body = (
-                message.content.text
-                if message.type == "quick_reply"
-                else message.body
-            )
+            body = message.content.text if message.type == "quick_reply" else message.body
         case "template_message":
             template_message = TemplateMessage(**event.content.serialize()).template_message
             body = next(
