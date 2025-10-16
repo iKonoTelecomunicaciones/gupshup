@@ -39,6 +39,7 @@ class ProvisioningAPI:
         self.app.router.add_post("/v1/interactive_message", self.interactive_message)
         self.app.router.add_post("/v1/set_power_level", self.set_power_level)
         self.app.router.add_post("/v1/set_relay", self.set_relay)
+        self.app.router.add_get("/v1/set_relay/{room_id}", self.validate_set_relay)
 
     @property
     def _acao_headers(self) -> dict[str, str]:
@@ -727,6 +728,71 @@ class ProvisioningAPI:
                 "detail": {
                     "message": f"Set relay for user {portal.mxid} in portal {room_id} was successful"
                 }
+            },
+            status=200,
+            headers=self._acao_headers,
+        )
+
+    async def validate_set_relay(self, request: web.Request) -> web.Response:
+        """
+        Validate if a specific room has a relay user set.
+        Parameters
+        ----------
+        request: web.Request
+            The request that contains the room_id in the path.
+        Returns
+        -------
+        JSON
+            The response of the request with a success message or an error message
+        """
+        logger.debug("Validate set relay")
+
+        user, _ = await self._get_user(request, read_body=False)
+
+        try:
+            room_id = request.match_info["room_id"]
+        except KeyError:
+            return web.json_response(
+                data={"detail": {"message": "The room_id was not provided in the path"}},
+                status=400,
+                headers=self._acao_headers,
+            )
+
+        # Get the portal by room_id
+        portal: po.Portal = await po.Portal.get_by_mxid(room_id)
+
+        if not portal:
+            logger.error(f"Portal {room_id} not found")
+            return web.json_response(
+                data={
+                    "detail": {
+                        "message": f"Failed to get portal %(room_id)s",
+                        "data": {"room_id": room_id},
+                    },
+                },
+                status=400,
+                headers=self._acao_headers,
+            )
+
+        if not portal.relay_user_id or portal.relay_user_id != user.mxid:
+            logger.debug(f"Portal {room_id} does not have a relay user set")
+            return web.json_response(
+                data={
+                    "detail": {
+                        "message": f"Portal %(room_id)s does not have a relay user set for user %(user_id)s",
+                        "data": {"room_id": room_id, "user_id": user.mxid},
+                    },
+                },
+                status=400,
+                headers=self._acao_headers,
+            )
+
+        return web.json_response(
+            data={
+                "detail": {
+                    "message": f"Portal %(room_id)s has relay user %(relay_user_id)s set",
+                    "data": {"room_id": room_id, "relay_user_id": user.mxid},
+                },
             },
             status=200,
             headers=self._acao_headers,
