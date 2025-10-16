@@ -63,6 +63,17 @@ class InteractiveMessageOption(SerializableAttrs):
     description: str = ib(default=None, metadata={"json": "description"})
     postback_text: str = ib(default=None, metadata={"json": "postbackText"})
 
+    @classmethod
+    def from_dict(cls, data: dict):
+        return cls(
+            type=data.get("type"),
+            listId=data.get("listId", ""),
+            buttonId=data.get("buttonId", ""),
+            title=data.get("title"),
+            description=data.get("description"),
+            postback_text=data.get("postbackText"),
+        )
+
 
 @dataclass
 class ItemListReplay(SerializableAttrs):
@@ -75,7 +86,9 @@ class ItemListReplay(SerializableAttrs):
         return cls(
             title=data.get("title"),
             subtitle=data.get("subtitle"),
-            options=[InteractiveMessageOption(**option) for option in data.get("options", [])],
+            options=[
+                InteractiveMessageOption.from_dict(option) for option in data.get("options", [])
+            ],
         )
 
 
@@ -83,6 +96,13 @@ class ItemListReplay(SerializableAttrs):
 class GlobalButtonsListReplay(SerializableAttrs):
     type: str = ib(default=None, metadata={"json": "type"})
     title: str = ib(default=None, metadata={"json": "title"})
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        return cls(
+            type=data.get("type"),
+            title=data.get("title"),
+        )
 
 
 @dataclass
@@ -131,7 +151,7 @@ class InteractiveMessage(SerializableAttrs):
             return cls(
                 type=data["type"],
                 content=ContentQuickReplay.from_dict(data["content"]),
-                options=[InteractiveMessageOption(**option) for option in data["options"]],
+                options=[InteractiveMessageOption.from_dict(option) for option in data["options"]],
             )
         elif data["type"] == "list":
             body_text = TextReply.from_dict({"text": data["body"]})
@@ -141,7 +161,7 @@ class InteractiveMessage(SerializableAttrs):
                 title=title.text if title else None,
                 body=body_text.text if body_text else None,
                 global_buttons=[
-                    GlobalButtonsListReplay(**item) for item in data["global_buttons"]
+                    GlobalButtonsListReplay.from_dict(item) for item in data["global_buttons"]
                 ],
                 items=[ItemListReplay.from_dict(item) for item in data["items"]],
             )
