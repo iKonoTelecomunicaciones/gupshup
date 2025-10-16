@@ -851,6 +851,13 @@ class Portal(DBPortal, BasePortal):
     async def handle_interactive_message(
         self, sender: u.User, interactive_message: InteractiveMessage, event_id: EventID
     ) -> None:
+        #msg = TextMessageEventContent(
+        #    body=interactive_message.message,
+        #    msgtype=MessageType.TEXT,
+        #    formatted_body=markdown(interactive_message.message.replace("\n", "<br>")),
+        #    format=Format.HTML,
+        #)
+        #msg.trim_reply_fallback()
         # Send message in whatsapp format
         resp = await self.gsc.send_message(
             data=await self.main_data_gs,
