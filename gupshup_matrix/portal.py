@@ -472,15 +472,12 @@ class Portal(DBPortal, BasePortal):
                 mxid = await self.send_text_message(message.payload.body.text)
 
         elif message.payload.type in ["button_reply", "list_reply"]:
-            if message.payload.type == "button_reply":
-                if self.config["quick_reply.send_option_index"]:
-                    # Separamos el contenido que llega de gupshup y obtenemos el último elemento
-                    # que contiene el número de la opción seleccionada
-                    body = message.payload.body.reply_message.split()[-1]
-                else:
-                    body = message.payload.body.title
-            elif message.payload.type == "list_reply":
-                body = message.payload.body.title
+            body = message.payload.body.title
+
+            if self.config["quick_reply.send_option_index"]:
+                # Separamos el contenido que llega de gupshup y obtenemos el último elemento
+                # que contiene el número de la opción seleccionada
+                body = message.payload.body.reply_message.split()[-1]
 
             mxid = await self.send_text_message(body)
 
