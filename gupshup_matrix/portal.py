@@ -475,9 +475,12 @@ class Portal(DBPortal, BasePortal):
             body = message.payload.body.title
 
             if self.config["quick_reply.send_option_index"]:
-                # Separamos el contenido que llega de gupshup y obtenemos el último elemento
-                # que contiene el número de la opción seleccionada
-                body = message.payload.body.reply_message.split()[-1]
+                if message.payload.type == "button_reply":
+                    # Reply messages has the format "You selected option number X" where X is
+                    # the position of the button selected, so we extract the number.
+                    body = message.payload.body.reply_message.split()[-1]
+                elif message.payload.type == "list_reply":
+                    body = message.payload.body.postback_text
 
             mxid = await self.send_text_message(body)
 

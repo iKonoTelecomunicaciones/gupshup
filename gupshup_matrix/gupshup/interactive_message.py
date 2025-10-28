@@ -61,7 +61,7 @@ class InteractiveMessageOption(SerializableAttrs):
     buttonId: str = ib(metadata={"json": "buttonId"}, default="")
     title: str = ib(default=None, metadata={"json": "title"})
     description: str = ib(default=None, metadata={"json": "description"})
-    postback_text: str = ib(default=None, metadata={"json": "postback_text"})
+    postbackText: str = ib(default=None, metadata={"json": "postbackText"})
 
     @classmethod
     def from_dict(cls, data: dict):
@@ -71,7 +71,7 @@ class InteractiveMessageOption(SerializableAttrs):
             buttonId=data.get("buttonId", ""),
             title=data.get("title"),
             description=data.get("description"),
-            postback_text=data.get("postback_text"),
+            postbackText=data.get("postback_text"),
         )
 
 
@@ -141,7 +141,7 @@ class InteractiveMessage(SerializableAttrs):
 
             for item in self.items:
                 for option in item.options:
-                    msg = f"{msg}\n{option.postback_text}. {option.title}"
+                    msg = f"{msg}\n{option.postbackText}. {option.title}"
 
         return re.sub(r"\*(.+?)\*", r"**\1**", msg)
 
